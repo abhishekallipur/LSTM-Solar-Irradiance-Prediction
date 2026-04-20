@@ -206,16 +206,37 @@ def run_attention_experiment(sequence_length: int, epochs: int, batch_size: int,
         loss_variant=loss_variant,
     )
 
-    model.fit(
-        bundle.X_train,
-        bundle.y_train,
-        validation_data=(bundle.X_val, bundle.y_val),
-        epochs=epochs,
-        batch_size=batch_size,
-        shuffle=True,
-        callbacks=make_callbacks(),
-        verbose=0,
-    )
+    fit_ok = False
+    for bs in [batch_size, max(64, batch_size // 2)]:
+        try:
+            model.fit(
+                bundle.X_train,
+                bundle.y_train,
+                validation_data=(bundle.X_val, bundle.y_val),
+                epochs=epochs,
+                batch_size=bs,
+                shuffle=True,
+                callbacks=make_callbacks(),
+                verbose=0,
+            )
+            fit_ok = True
+            batch_size = bs
+            break
+        except tf.errors.ResourceExhaustedError:
+            tf.keras.backend.clear_session()
+            model = build_attention_model_custom(
+                sequence_length=sequence_length,
+                num_features=bundle.X_train.shape[-1],
+                learning_rate=learning_rate,
+                peak_threshold_scaled=peak_threshold_scaled,
+                peak_weight=2.0,
+                dropout=dropout,
+                l2_reg=l2_reg,
+                loss_variant=loss_variant,
+            )
+
+    if not fit_ok:
+        raise RuntimeError("Attention experiment failed after batch-size retries")
 
     pred_scaled = model.predict(bundle.X_test, batch_size=batch_size, verbose=0).reshape(-1)
     y_true_raw = attn.inverse_transform_y(bundle.y_test.reshape(-1), bundle.y_scaler)
@@ -246,16 +267,34 @@ def run_baseline_experiment(epochs: int, batch_size: int, learning_rate: float, 
         l2_reg=l2_reg,
     )
 
-    model.fit(
-        X_train,
-        bundle.y_train,
-        validation_data=(bundle.X_val, bundle.y_val),
-        epochs=epochs,
-        batch_size=batch_size,
-        shuffle=True,
-        callbacks=make_callbacks(),
-        verbose=0,
-    )
+    fit_ok = False
+    for bs in [batch_size, max(64, batch_size // 2)]:
+        try:
+            model.fit(
+                X_train,
+                bundle.y_train,
+                validation_data=(bundle.X_val, bundle.y_val),
+                epochs=epochs,
+                batch_size=bs,
+                shuffle=True,
+                callbacks=make_callbacks(),
+                verbose=0,
+            )
+            fit_ok = True
+            batch_size = bs
+            break
+        except tf.errors.ResourceExhaustedError:
+            tf.keras.backend.clear_session()
+            model = build_baseline_model_custom(
+                sequence_length=48,
+                num_features=bundle.X_train.shape[-1],
+                learning_rate=learning_rate,
+                dropout=dropout,
+                l2_reg=l2_reg,
+            )
+
+    if not fit_ok:
+        raise RuntimeError("Baseline experiment failed after batch-size retries")
 
     val_pred_scaled = model.predict(bundle.X_val, batch_size=batch_size, verbose=0).reshape(-1, 1)
     test_pred_scaled = model.predict(bundle.X_test, batch_size=batch_size, verbose=0).reshape(-1, 1)
@@ -373,16 +412,19 @@ def run_tier2(args: argparse.Namespace) -> None:
             logger.warning("Budget reached before sequence sweep finished")
             break
         logger.info("Task 2.1 -> sequence_length=%d", seq)
-        row = run_attention_experiment(
-            sequence_length=seq,
-            epochs=args.epochs_attention,
-            batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
-            dropout=0.2,
-            l2_reg=0.0,
-            loss_variant="peak_weighted",
-        )
-        seq_rows.append(row)
+        try:
+            row = run_attention_experiment(
+                sequence_length=seq,
+                epochs=args.epochs_attention,
+                batch_size=args.batch_size,
+                learning_rate=args.learning_rate,
+                dropout=0.2,
+                l2_reg=0.0,
+                loss_variant="peak_weighted",
+            )
+            seq_rows.append(row)
+        except Exception as exc:
+            logger.exception("Sequence experiment failed for %d: %s", seq, exc)
 
     if seq_rows:
         df_seq = pd.DataFrame(seq_rows)
@@ -400,26 +442,29 @@ def run_tier2(args: argparse.Namespace) -> None:
                 logger.warning("Budget reached during regularization tuning")
                 break
             logger.info("Task 2.2 -> %s dropout=%.1f l2=%s", model_type, dropout, l2v)
-            if model_type == "baseline":
-                row = run_baseline_experiment(
-                    epochs=args.epochs_baseline,
-                    batch_size=args.batch_size,
-                    learning_rate=args.learning_rate,
-                    dropout=dropout,
-                    l2_reg=l2v,
-                )
-            else:
-                row = run_attention_experiment(
-                    sequence_length=24,
-                    epochs=args.epochs_attention,
-                    batch_size=args.batch_size,
-                    learning_rate=args.learning_rate,
-                    dropout=dropout,
-                    l2_reg=l2v,
-                    loss_variant="peak_weighted",
-                )
-            row["model"] = model_type
-            reg_rows.append(row)
+            try:
+                if model_type == "baseline":
+                    row = run_baseline_experiment(
+                        epochs=args.epochs_baseline,
+                        batch_size=args.batch_size,
+                        learning_rate=args.learning_rate,
+                        dropout=dropout,
+                        l2_reg=l2v,
+                    )
+                else:
+                    row = run_attention_experiment(
+                        sequence_length=24,
+                        epochs=args.epochs_attention,
+                        batch_size=args.batch_size,
+                        learning_rate=args.learning_rate,
+                        dropout=dropout,
+                        l2_reg=l2v,
+                        loss_variant="peak_weighted",
+                    )
+                row["model"] = model_type
+                reg_rows.append(row)
+            except Exception as exc:
+                logger.exception("Regularization experiment failed for %s d=%.2f l2=%s: %s", model_type, dropout, l2v, exc)
 
     if reg_rows:
         df_reg = pd.DataFrame(reg_rows)
@@ -441,16 +486,19 @@ def run_tier2(args: argparse.Namespace) -> None:
             logger.warning("Budget reached during loss variant sweep")
             break
         logger.info("Task 2.3 -> loss variant %s", variant)
-        row = run_attention_experiment(
-            sequence_length=24,
-            epochs=args.epochs_attention,
-            batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
-            dropout=0.2,
-            l2_reg=0.0,
-            loss_variant=variant,
-        )
-        loss_rows.append(row)
+        try:
+            row = run_attention_experiment(
+                sequence_length=24,
+                epochs=args.epochs_attention,
+                batch_size=args.batch_size,
+                learning_rate=args.learning_rate,
+                dropout=0.2,
+                l2_reg=0.0,
+                loss_variant=variant,
+            )
+            loss_rows.append(row)
+        except Exception as exc:
+            logger.exception("Loss experiment failed for variant=%s: %s", variant, exc)
 
     if loss_rows:
         df_loss = pd.DataFrame(loss_rows)
@@ -474,53 +522,80 @@ def run_tier2(args: argparse.Namespace) -> None:
                 logger.warning("Budget reached during augmentation tests")
                 break
             logger.info("Task 2.4 -> %s %s", model_type, name)
-            if model_type == "baseline":
-                row = run_baseline_experiment(
-                    epochs=args.epochs_baseline,
-                    batch_size=args.batch_size,
-                    learning_rate=args.learning_rate,
-                    dropout=0.2,
-                    l2_reg=0.0,
-                    aug_noise=noise,
-                    aug_shift=shift,
-                )
-            else:
-                # Attention augmentation: apply on train split via temporary replacement
-                df = attn.load_time_series("dataset")
-                feat = attn.create_features(df)
-                bundle = attn.prepare_sequences(feat, sequence_length=24, train_ratio=0.7, val_ratio=0.15)
-                X_train_aug = augment_sequences(bundle.X_train, noise_sigma=noise, max_shift=shift)
-                peak_threshold_scaled = float(bundle.y_scaler.transform([[bundle.train_peak_threshold_raw]])[0, 0])
-                model = build_attention_model_custom(
-                    sequence_length=24,
-                    num_features=bundle.X_train.shape[-1],
-                    learning_rate=args.learning_rate,
-                    peak_threshold_scaled=peak_threshold_scaled,
-                    peak_weight=2.0,
-                    dropout=0.2,
-                    l2_reg=0.0,
-                    loss_variant="peak_weighted",
-                )
-                model.fit(
-                    X_train_aug,
-                    bundle.y_train,
-                    validation_data=(bundle.X_val, bundle.y_val),
-                    epochs=args.epochs_attention,
-                    batch_size=args.batch_size,
-                    shuffle=True,
-                    callbacks=make_callbacks(),
-                    verbose=0,
-                )
-                pred_scaled = model.predict(bundle.X_test, batch_size=args.batch_size, verbose=0).reshape(-1)
-                y_true_raw = attn.inverse_transform_y(bundle.y_test.reshape(-1), bundle.y_scaler)
-                y_pred_raw = np.clip(attn.inverse_transform_y(pred_scaled, bundle.y_scaler), 0.0, None)
-                row = calculate_metrics(y_true_raw, y_pred_raw, bundle.train_peak_threshold_raw)
+            try:
+                if model_type == "baseline":
+                    row = run_baseline_experiment(
+                        epochs=args.epochs_baseline,
+                        batch_size=args.batch_size,
+                        learning_rate=args.learning_rate,
+                        dropout=0.2,
+                        l2_reg=0.0,
+                        aug_noise=noise,
+                        aug_shift=shift,
+                    )
+                else:
+                    # Attention augmentation: apply on train split via temporary replacement
+                    df = attn.load_time_series("dataset")
+                    feat = attn.create_features(df)
+                    bundle = attn.prepare_sequences(feat, sequence_length=24, train_ratio=0.7, val_ratio=0.15)
+                    X_train_aug = augment_sequences(bundle.X_train, noise_sigma=noise, max_shift=shift)
+                    peak_threshold_scaled = float(bundle.y_scaler.transform([[bundle.train_peak_threshold_raw]])[0, 0])
+                    model = build_attention_model_custom(
+                        sequence_length=24,
+                        num_features=bundle.X_train.shape[-1],
+                        learning_rate=args.learning_rate,
+                        peak_threshold_scaled=peak_threshold_scaled,
+                        peak_weight=2.0,
+                        dropout=0.2,
+                        l2_reg=0.0,
+                        loss_variant="peak_weighted",
+                    )
 
-            row["model"] = model_type
-            row["augmentation"] = name
-            row["noise_sigma"] = noise
-            row["max_shift"] = shift
-            aug_rows.append(row)
+                    fit_ok = False
+                    used_bs = args.batch_size
+                    for bs in [args.batch_size, max(64, args.batch_size // 2)]:
+                        try:
+                            model.fit(
+                                X_train_aug,
+                                bundle.y_train,
+                                validation_data=(bundle.X_val, bundle.y_val),
+                                epochs=args.epochs_attention,
+                                batch_size=bs,
+                                shuffle=True,
+                                callbacks=make_callbacks(),
+                                verbose=0,
+                            )
+                            fit_ok = True
+                            used_bs = bs
+                            break
+                        except tf.errors.ResourceExhaustedError:
+                            tf.keras.backend.clear_session()
+                            model = build_attention_model_custom(
+                                sequence_length=24,
+                                num_features=bundle.X_train.shape[-1],
+                                learning_rate=args.learning_rate,
+                                peak_threshold_scaled=peak_threshold_scaled,
+                                peak_weight=2.0,
+                                dropout=0.2,
+                                l2_reg=0.0,
+                                loss_variant="peak_weighted",
+                            )
+
+                    if not fit_ok:
+                        raise RuntimeError("Attention augmentation experiment failed after batch-size retries")
+
+                    pred_scaled = model.predict(bundle.X_test, batch_size=used_bs, verbose=0).reshape(-1)
+                    y_true_raw = attn.inverse_transform_y(bundle.y_test.reshape(-1), bundle.y_scaler)
+                    y_pred_raw = np.clip(attn.inverse_transform_y(pred_scaled, bundle.y_scaler), 0.0, None)
+                    row = calculate_metrics(y_true_raw, y_pred_raw, bundle.train_peak_threshold_raw)
+
+                row["model"] = model_type
+                row["augmentation"] = name
+                row["noise_sigma"] = noise
+                row["max_shift"] = shift
+                aug_rows.append(row)
+            except Exception as exc:
+                logger.exception("Augmentation experiment failed for %s %s: %s", model_type, name, exc)
 
     if aug_rows:
         df_aug = pd.DataFrame(aug_rows)
