@@ -1,0 +1,39 @@
+name: Tier2 Automation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tier2.yml'
+      - 'models/agent/tier2_automation.py'
+      - 'models/**'
+      - 'dataset/**'
+      - 'requirements.txt'
+
+jobs:
+  tier2:
+    runs-on: self-hosted
+    timeout-minutes: 190
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Python 3.12 check
+        run: py -3.12 --version
+
+      - name: Install deps
+        run: py -3.12 -m pip install --upgrade pip; py -3.12 -m pip install -r requirements.txt
+
+      - name: Run Tier2 automation
+        run: py -3.12 models/agent/tier2_automation.py --time-budget-hours 2.5 --epochs-baseline 22 --epochs-attention 28 --batch-size 256
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: tier2-reports
+          path: |
+            outputs/reports/*
+            outputs/plots/*
