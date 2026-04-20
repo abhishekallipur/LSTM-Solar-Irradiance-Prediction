@@ -1,0 +1,34 @@
+Tier 1 Summary
+============================================================
+Best baseline blend: 0.05
+Baseline wins: 5
+Attention wins: 4
+
+Decision: Baseline remains production model.
+Next step: Tier 2 tuning focus on baseline and ensemble testing.
+
+Baseline metrics:
+- rmse: 55.7497
+- mae: 24.1806
+- r2: 0.9703
+- day_rmse: 77.7665
+- day_mae: 40.1276
+- peak_rmse: 53.6613
+- peak_mae: 29.7326
+- pred_min: 2.9356
+- pred_max: 1023.9704
+- true_min: 0.0000
+- true_max: 1064.0000
+
+Attention metrics:
+- rmse: 56.1767
+- mae: 18.9056
+- r2: 0.9698
+- day_rmse: 79.4492
+- day_mae: 37.2915
+- peak_rmse: 60.0320
+- peak_mae: 27.1536
+- pred_min: 0.0000
+- pred_max: 1053.7751
+- true_min: 0.0000
+- true_max: 1064.0000

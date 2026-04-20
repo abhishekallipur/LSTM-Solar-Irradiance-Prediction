@@ -1,8 +1,3 @@
-from models.baseline_lstm.model import *
-
-
-if __name__ == "__main__":
-    main()
 """
 Debugged and refactored GHI forecasting pipeline (TensorFlow/Keras).
 
@@ -29,6 +24,12 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+
+
+def _ensure_parent_dir(file_path: str) -> None:
+    parent = os.path.dirname(file_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
 
 def set_seed(seed: int = 42) -> None:
@@ -475,6 +476,7 @@ def save_thirty_day_plot(
         raise ValueError("No samples available to render 30-day plot.")
 
     ts = pd.to_datetime(timestamps[:points])
+    _ensure_parent_dir(output_path)
     plt.figure(figsize=(15, 5))
     plt.plot(ts, y_true[:points], label="Actual GHI", linewidth=1.8, color="#1f77b4")
     plt.plot(ts, y_pred[:points], label="Predicted GHI", linewidth=1.8, color="#ff7f0e")
@@ -507,6 +509,7 @@ def save_one_day_plot(
 
     ts = pd.to_datetime(timestamps[start:end])
 
+    _ensure_parent_dir(output_path)
     plt.figure(figsize=(12, 4))
     plt.plot(ts, y_true[start:end], label="Actual GHI", linewidth=2.0, color="#1f77b4")
     plt.plot(ts, y_pred[start:end], label="Predicted GHI", linewidth=2.0, color="#ff7f0e")
@@ -528,8 +531,8 @@ def run_pipeline(
     learning_rate: float = 1e-3,
     persistence_blend: float = -1.0,
     prediction_days: int = 30,
-    plot_output_path: str = "prediction_30_days.png",
-    one_day_plot_output_path: str = "prediction_1_day.png",
+    plot_output_path: str = "outputs/plots/prediction_30_days.png",
+    one_day_plot_output_path: str = "outputs/plots/prediction_1_day.png",
     one_day_start_index: int = 0,
     seed: int = 42,
     no_plot: bool = False,
@@ -685,8 +688,8 @@ def parse_args() -> argparse.Namespace:
         help="Blend weight for persistence baseline. Use negative value for auto-tune on validation.",
     )
     parser.add_argument("--prediction-days", type=int, default=30, help="Number of days to include in saved forecast plot.")
-    parser.add_argument("--plot-output", type=str, default="prediction_30_days.png", help="File path for saved prediction plot.")
-    parser.add_argument("--one-day-plot-output", type=str, default="prediction_1_day.png", help="File path for saved 1-day prediction plot.")
+    parser.add_argument("--plot-output", type=str, default="outputs/plots/prediction_30_days.png", help="File path for saved prediction plot.")
+    parser.add_argument("--one-day-plot-output", type=str, default="outputs/plots/prediction_1_day.png", help="File path for saved 1-day prediction plot.")
     parser.add_argument("--one-day-start-index", type=int, default=0, help="0-based day index within the test split for 1-day plot.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--no-plot", action="store_true", help="Disable plotting.")

@@ -1,8 +1,3 @@
-from models.attention_lstm.model import *
-
-
-if __name__ == "__main__":
-    run_training(parse_args())
 import argparse
 import glob
 import os
@@ -18,6 +13,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 from tensorflow import keras
 from tensorflow.keras import layers
+
+
+def _ensure_parent_dir(file_path: str) -> None:
+    parent = os.path.dirname(file_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
 
 def set_seed(seed: int = 42) -> None:
@@ -326,6 +327,7 @@ def plot_actual_vs_predicted(
     points = min(len(y_true), max_points)
     ts = pd.to_datetime(timestamps[:points])
 
+    _ensure_parent_dir(output_path)
     plt.figure(figsize=(14, 5))
     plt.plot(ts, y_true[:points], label="Actual GHI", linewidth=1.8)
     plt.plot(ts, y_pred[:points], label="Predicted GHI", linewidth=1.8)
@@ -351,6 +353,7 @@ def plot_attention_weights(
     weights = attention_weights[0, :, 0]
     steps = np.arange(1, len(weights) + 1)
 
+    _ensure_parent_dir(output_path)
     plt.figure(figsize=(10, 4))
     plt.plot(steps, weights, marker="o", linewidth=1.5)
     plt.title("Attention Weights Across Input Timesteps")
@@ -492,8 +495,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--peak-weight", type=float, default=2.0, help="Loss weight for peak targets")
     parser.add_argument("--disable-peak-weight", action="store_true", help="Disable peak weighting in Huber loss")
     parser.add_argument("--early-stopping-patience", type=int, default=10, help="EarlyStopping patience")
-    parser.add_argument("--prediction-plot", type=str, default="attention_actual_vs_pred.png", help="Path to save Actual vs Predicted plot")
-    parser.add_argument("--attention-plot", type=str, default="attention_weights.png", help="Path to save attention weights plot")
+    parser.add_argument("--prediction-plot", type=str, default="outputs/plots/attention_actual_vs_pred.png", help="Path to save Actual vs Predicted plot")
+    parser.add_argument("--attention-plot", type=str, default="outputs/plots/attention_weights.png", help="Path to save attention weights plot")
     parser.add_argument("--plot-points", type=int, default=720, help="Max test points in prediction plot")
     parser.add_argument("--attention-sample-index", type=int, default=0, help="Test sample index for attention visualization")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")

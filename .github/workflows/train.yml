@@ -1,0 +1,20 @@
+name: Auto Train Model
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  train:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - run: pip install -r requirements.txt
+
+      - run: python train.py

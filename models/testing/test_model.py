@@ -1,9 +1,3 @@
-from models.testing.test_model import *
-
-
-if __name__ == "__main__":
-    import sys
-    sys.exit(main())
 """
 Test suite for the LSTM GHI forecasting model.
 Tests data loading, feature engineering, model training, and predictions.

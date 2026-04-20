@@ -1,8 +1,3 @@
-from models.analysis.correlation_heatmap import *
-
-
-if __name__ == "__main__":
-    main()
 import argparse
 import glob
 import os
@@ -11,6 +6,12 @@ from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+
+def _ensure_parent_dir(file_path: str) -> None:
+    parent = os.path.dirname(file_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
 
 def _normalize(name: str) -> str:
@@ -107,6 +108,7 @@ def plot_correlation_heatmap(df: pd.DataFrame, output_path: str) -> pd.DataFrame
     labels = list(corr_matrix.columns)
     matrix = corr_matrix.to_numpy()
 
+    _ensure_parent_dir(output_path)
     plt.figure(figsize=(12, 10))
     im = plt.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
     plt.colorbar(im, fraction=0.046, pad=0.04, label="Pearson r")
@@ -128,7 +130,7 @@ def plot_correlation_heatmap(df: pd.DataFrame, output_path: str) -> pd.DataFrame
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pearson correlation heatmap for NSRDB meteorological data and GHI")
     parser.add_argument("--data-path", type=str, default="dataset", help="Path to NSRDB CSV file or folder")
-    parser.add_argument("--output", type=str, default="pearson_correlation_heatmap.png", help="Output image path")
+    parser.add_argument("--output", type=str, default="outputs/plots/pearson_correlation_heatmap.png", help="Output image path")
     args = parser.parse_args()
 
     df = load_nsrdb(args.data_path)

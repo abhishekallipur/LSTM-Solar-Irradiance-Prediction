@@ -1,0 +1,68 @@
+[2026-04-20 13:38:28,416] INFO: Tier 1 workflow started
+[2026-04-20 13:38:28,427] INFO: Preparing baseline model and data
+[2026-04-20 13:39:21,508] INFO: Baseline default blend metrics RMSE=55.08 MAE=24.36 Day_MAE=40.53 Peak_MAE=29.93
+[2026-04-20 13:39:21,510] INFO: Tier 1, Task 1.1: Blend ratio search started
+[2026-04-20 13:39:21,515] INFO: Blend=0.00 -> RMSE=56.97 MAE=24.81 Day_MAE=41.36 Peak_MAE=30.85
+[2026-04-20 13:39:21,519] INFO: Blend=0.05 -> RMSE=55.75 MAE=24.18 Day_MAE=40.13 Peak_MAE=29.73
+[2026-04-20 13:39:21,524] INFO: Blend=0.10 -> RMSE=55.08 MAE=24.36 Day_MAE=40.53 Peak_MAE=29.93
+[2026-04-20 13:39:21,524] INFO: Blend=0.15 -> RMSE=54.99 MAE=25.23 Day_MAE=42.31 Peak_MAE=31.39
+[2026-04-20 13:39:21,530] INFO: Blend=0.20 -> RMSE=55.47 MAE=26.71 Day_MAE=45.33 Peak_MAE=33.92
+[2026-04-20 13:39:21,535] INFO: Blend=0.30 -> RMSE=58.09 MAE=30.71 Day_MAE=53.48 Peak_MAE=41.22
+[2026-04-20 13:39:21,537] INFO: Blend=0.40 -> RMSE=62.67 MAE=35.51 Day_MAE=63.24 Peak_MAE=50.48
+[2026-04-20 13:39:21,537] INFO: Blend=0.50 -> RMSE=68.82 MAE=40.75 Day_MAE=73.87 Peak_MAE=60.71
+[2026-04-20 13:39:21,899] INFO: Tier 1, Task 1.1: Completed. Winner blend=0.05
+[2026-04-20 13:39:21,899] INFO: Tier 1, Task 1.2: Attention retraining started
+[2026-04-20 13:44:53,003] INFO: Tier 1, Task 1.2: Completed. RMSE=56.18 MAE=18.91 Day_MAE=37.29 Peak_MAE=27.15
+[2026-04-20 13:44:53,003] INFO: Tier 1, Task 1.3: Side-by-side comparison started
+[2026-04-20 13:44:53,536] INFO: Tier 1, Task 1.3: Comparison completed
+[2026-04-20 13:44:53,536] INFO: Tier 1 workflow finished
+[2026-04-20 13:44:53,536] INFO: Artifacts generated: {
+  "blend_csv": "blend_search_results.csv",
+  "blend_plot": "blend_ratio_vs_metrics.png",
+  "attention_model": "attention_lstm_50epochs.h5",
+  "attention_history": "attention_training_history.json",
+  "attention_curve_plot": "attention_training_curve.png",
+  "attention_pred_plot": "attention_actual_vs_pred_50epochs.png",
+  "attention_weights_plot": "attention_weights_50epochs.png",
+  "comparison_csv": "tier1_comparison.csv",
+  "comparison_rmse_plot": "comparison_rmse_mae_r2.png",
+  "comparison_day_plot": "comparison_daytime_metrics.png",
+  "comparison_peak_plot": "comparison_peak_metrics.png",
+  "summary_txt": "tier1_summary.txt",
+  "log_file": "ghi_agent_log.txt"
+}
+[2026-04-20 13:44:53,536] INFO: Blend search rows: 8, Attention epoch rows: 60
+[2026-04-20 14:28:41,260] INFO: Tier 1 workflow started
+[2026-04-20 14:28:41,261] INFO: Preparing baseline model and data
+[2026-04-20 14:29:30,555] INFO: Baseline default blend metrics RMSE=55.08 MAE=24.36 Day_MAE=40.53 Peak_MAE=29.93
+[2026-04-20 14:29:30,559] INFO: Tier 1, Task 1.1: Blend ratio search started
+[2026-04-20 14:29:30,563] INFO: Blend=0.00 -> RMSE=56.97 MAE=24.81 Day_MAE=41.36 Peak_MAE=30.85
+[2026-04-20 14:29:30,566] INFO: Blend=0.05 -> RMSE=55.75 MAE=24.18 Day_MAE=40.13 Peak_MAE=29.73
+[2026-04-20 14:29:30,571] INFO: Blend=0.10 -> RMSE=55.08 MAE=24.36 Day_MAE=40.53 Peak_MAE=29.93
+[2026-04-20 14:29:30,576] INFO: Blend=0.15 -> RMSE=54.99 MAE=25.23 Day_MAE=42.31 Peak_MAE=31.39
+[2026-04-20 14:29:30,580] INFO: Blend=0.20 -> RMSE=55.47 MAE=26.71 Day_MAE=45.33 Peak_MAE=33.92
+[2026-04-20 14:29:30,583] INFO: Blend=0.30 -> RMSE=58.09 MAE=30.71 Day_MAE=53.48 Peak_MAE=41.22
+[2026-04-20 14:29:30,586] INFO: Blend=0.40 -> RMSE=62.67 MAE=35.51 Day_MAE=63.24 Peak_MAE=50.48
+[2026-04-20 14:29:30,590] INFO: Blend=0.50 -> RMSE=68.82 MAE=40.75 Day_MAE=73.87 Peak_MAE=60.71
+[2026-04-20 14:29:30,851] INFO: Tier 1, Task 1.1: Completed. Winner blend=0.05
+[2026-04-20 14:29:30,857] INFO: Tier 1, Task 1.2: Attention retraining started
+[2026-04-20 14:34:36,246] INFO: Tier 1, Task 1.2: Completed. RMSE=56.18 MAE=18.91 Day_MAE=37.29 Peak_MAE=27.15
+[2026-04-20 14:34:36,246] INFO: Tier 1, Task 1.3: Side-by-side comparison started
+[2026-04-20 14:34:36,912] INFO: Tier 1, Task 1.3: Comparison completed
+[2026-04-20 14:34:36,912] INFO: Tier 1 workflow finished
+[2026-04-20 14:34:36,912] INFO: Artifacts generated: {
+  "blend_csv": "outputs/reports/blend_search_results.csv",
+  "blend_plot": "outputs/plots/blend_ratio_vs_metrics.png",
+  "attention_model": "outputs/artifacts/attention_lstm_50epochs.h5",
+  "attention_history": "outputs/reports/attention_training_history.json",
+  "attention_curve_plot": "outputs/plots/attention_training_curve.png",
+  "attention_pred_plot": "outputs/plots/attention_actual_vs_pred_50epochs.png",
+  "attention_weights_plot": "outputs/plots/attention_weights_50epochs.png",
+  "comparison_csv": "outputs/reports/tier1_comparison.csv",
+  "comparison_rmse_plot": "outputs/plots/comparison_rmse_mae_r2.png",
+  "comparison_day_plot": "outputs/plots/comparison_daytime_metrics.png",
+  "comparison_peak_plot": "outputs/plots/comparison_peak_metrics.png",
+  "summary_txt": "outputs/reports/tier1_summary.txt",
+  "log_file": "outputs/reports/ghi_agent_log.txt"
+}
+[2026-04-20 14:34:36,912] INFO: Blend search rows: 8, Attention epoch rows: 60
