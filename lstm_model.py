@@ -1,14 +1,11 @@
 """
-Peak-aware CNN-BiLSTM-Attention model for next-hour GHI forecasting (TensorFlow/Keras).
+Debugged and refactored GHI forecasting pipeline (TensorFlow/Keras).
 
-Why this version improves over a plain LSTM:
-1) Better features: time cycles, lags, rolling stats, and ramps improve cloud-change awareness.
-2) Better scaling: train-only fitting + robust input scaling prevents outlier distortion.
-3) Better objective: weighted Huber emphasizes peaks/ramps and reduces oversmoothing bias.
-4) Better architecture: Conv1D + BiLSTM + attention captures local spikes + longer context.
-5) Better physics handling: night-time gating avoids false positive irradiance at night.
-
-This script is end-to-end runnable on a normal laptop.
+This version is designed to prevent collapse-to-zero behavior by:
+1) Leakage-safe scaling (fit scalers on train only).
+2) Day/night-aware weighting (without breaking contiguous sequences).
+3) Peak-aware weighted Huber training.
+4) Simple but stronger LSTM architecture (64 -> 32) with non-negative output.
 """
 
 import argparse
@@ -22,74 +19,70 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.preprocessing import RobustScaler, StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
 
-# ---------------------------
-# Reproducibility
-# ---------------------------
 def set_seed(seed: int = 42) -> None:
     random.seed(seed)
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
 
-# ---------------------------
-# NSRDB loading
-# ---------------------------
-def _normalize_name(name: str) -> str:
+def _normalize(name: str) -> str:
     return name.strip().lower().replace("_", " ").replace("-", " ")
 
 
 def _find_column(df: pd.DataFrame, aliases: List[str]) -> str:
-    lookup = {_normalize_name(c): c for c in df.columns}
+    normalized = {_normalize(c): c for c in df.columns}
     for alias in aliases:
-        key = _normalize_name(alias)
-        if key in lookup:
-            return lookup[key]
+        key = _normalize(alias)
+        if key in normalized:
+            return normalized[key]
     return ""
 
 
-def _load_single_nsrdb_csv(csv_path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
-    metadata_df = pd.read_csv(csv_path, nrows=1)
+def _load_single_nsrdb_csv(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
+    # NSRDB format:
+    # row1 metadata headers, row2 metadata values, row3 actual data headers, row4+ data rows.
+    metadata_df = pd.read_csv(path, nrows=1)
     metadata = {str(k): str(v) for k, v in metadata_df.iloc[0].to_dict().items()}
-    data_df = pd.read_csv(csv_path, skiprows=2)
+    data_df = pd.read_csv(path, skiprows=2)
     return data_df, metadata
 
 
-def _load_csv_or_folder(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
+def _load_nsrdb(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
     if os.path.isdir(path):
-        files = sorted(glob.glob(os.path.join(path, "*.csv")))
-        if not files:
+        csv_files = sorted(glob.glob(os.path.join(path, "*.csv")))
+        if not csv_files:
             raise FileNotFoundError(f"No CSV files found in folder: {path}")
     else:
-        files = [path]
+        csv_files = [path]
 
     frames = []
     metadata: Dict[str, str] = {}
-    for i, file_path in enumerate(files):
-        frame, meta = _load_single_nsrdb_csv(file_path)
-        frames.append(frame)
+    for i, csv_file in enumerate(csv_files):
+        df, meta = _load_single_nsrdb_csv(csv_file)
+        frames.append(df)
         if i == 0:
             metadata = meta
 
-    df = pd.concat(frames, ignore_index=True)
-    return df, metadata
+    combined = pd.concat(frames, ignore_index=True)
+    return combined, metadata
 
 
-def _calculate_solar_zenith_angle(
+def _compute_zenith_from_timestamp(
     timestamps: pd.Series, latitude: float, longitude: float, timezone_offset_hours: float
 ) -> np.ndarray:
+    # NOAA solar position approximation (good enough for model features).
     day_of_year = timestamps.dt.dayofyear.to_numpy(dtype=np.float64)
     hour = timestamps.dt.hour.to_numpy(dtype=np.float64)
     minute = timestamps.dt.minute.to_numpy(dtype=np.float64)
 
     gamma = 2.0 * np.pi / 365.0 * (day_of_year - 1.0 + (hour - 12.0) / 24.0)
-
     decl = (
         0.006918
         - 0.399912 * np.cos(gamma)
@@ -99,7 +92,6 @@ def _calculate_solar_zenith_angle(
         - 0.002697 * np.cos(3 * gamma)
         + 0.00148 * np.sin(3 * gamma)
     )
-
     eqtime = 229.18 * (
         0.000075
         + 0.001868 * np.cos(gamma)
@@ -123,11 +115,8 @@ def _calculate_solar_zenith_angle(
     return np.rad2deg(np.arccos(cos_zenith))
 
 
-# ---------------------------
-# Feature engineering
-# ---------------------------
 def build_feature_table(path: str) -> pd.DataFrame:
-    raw_df, metadata = _load_csv_or_folder(path)
+    raw, metadata = _load_nsrdb(path)
 
     aliases = {
         "ghi": ["GHI", "Global Horizontal Irradiance"],
@@ -139,312 +128,370 @@ def build_feature_table(path: str) -> pd.DataFrame:
     }
 
     selected = {}
-    for name, name_aliases in aliases.items():
-        col = _find_column(raw_df, name_aliases)
-        if not col and name != "zenith":
-            raise ValueError(f"Missing required column for '{name}'. Available: {list(raw_df.columns)}")
-        selected[name] = col
+    for name, options in aliases.items():
+        selected[name] = _find_column(raw, options)
+        if not selected[name] and name != "zenith":
+            raise ValueError(f"Missing required column '{name}'. Available columns: {list(raw.columns)}")
 
-    required_time = ["Year", "Month", "Day", "Hour", "Minute"]
-    if not all(c in raw_df.columns for c in required_time):
-        raise ValueError("NSRDB file must include Year, Month, Day, Hour, Minute columns.")
+    time_cols = ["Year", "Month", "Day", "Hour", "Minute"]
+    if not all(col in raw.columns for col in time_cols):
+        raise ValueError("NSRDB data must include Year, Month, Day, Hour, Minute.")
 
-    dt = pd.to_datetime(
+    timestamp = pd.to_datetime(
         {
-            "year": raw_df["Year"],
-            "month": raw_df["Month"],
-            "day": raw_df["Day"],
-            "hour": raw_df["Hour"],
-            "minute": raw_df["Minute"],
+            "year": raw["Year"],
+            "month": raw["Month"],
+            "day": raw["Day"],
+            "hour": raw["Hour"],
+            "minute": raw["Minute"],
         },
         errors="coerce",
     )
-    if dt.isna().any():
-        raise ValueError("Could not parse timestamps from Year/Month/Day/Hour/Minute.")
+    if timestamp.isna().any():
+        raise ValueError("Failed to parse timestamps from Year/Month/Day/Hour/Minute.")
 
-    df = pd.DataFrame(index=np.arange(len(raw_df)))
-    df["timestamp"] = dt
-    df["ghi"] = pd.to_numeric(raw_df[selected["ghi"]], errors="coerce")
-    df["temp"] = pd.to_numeric(raw_df[selected["temp"]], errors="coerce")
-    df["rh"] = pd.to_numeric(raw_df[selected["rh"]], errors="coerce")
-    df["wind"] = pd.to_numeric(raw_df[selected["wind"]], errors="coerce")
-    df["pressure"] = pd.to_numeric(raw_df[selected["pressure"]], errors="coerce")
+    df = pd.DataFrame({"timestamp": timestamp})
+    df["ghi"] = pd.to_numeric(raw[selected["ghi"]], errors="coerce")
+    df["temperature"] = pd.to_numeric(raw[selected["temp"]], errors="coerce")
+    df["relative_humidity"] = pd.to_numeric(raw[selected["rh"]], errors="coerce")
+    df["wind_speed"] = pd.to_numeric(raw[selected["wind"]], errors="coerce")
+    df["pressure"] = pd.to_numeric(raw[selected["pressure"]], errors="coerce")
 
     if selected["zenith"]:
-        df["zenith"] = pd.to_numeric(raw_df[selected["zenith"]], errors="coerce")
+        df["solar_zenith_angle"] = pd.to_numeric(raw[selected["zenith"]], errors="coerce")
     else:
         lat = float(metadata["Latitude"])
         lon = float(metadata["Longitude"])
         tz = float(metadata["Local Time Zone"])
-        df["zenith"] = _calculate_solar_zenith_angle(df["timestamp"], lat, lon, tz)
+        df["solar_zenith_angle"] = _compute_zenith_from_timestamp(df["timestamp"], lat, lon, tz)
 
-    # Time cyclical features
+    # sort to guarantee chronology after concatenation
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    # cyclical time features
     hour = df["timestamp"].dt.hour.astype(float)
-    dayofyear = df["timestamp"].dt.dayofyear.astype(float)
-    df["hour_sin"] = np.sin(2 * np.pi * hour / 24.0)
-    df["hour_cos"] = np.cos(2 * np.pi * hour / 24.0)
-    df["doy_sin"] = np.sin(2 * np.pi * dayofyear / 365.0)
-    df["doy_cos"] = np.cos(2 * np.pi * dayofyear / 365.0)
+    day_of_year = df["timestamp"].dt.dayofyear.astype(float)
+    df["hour"] = hour
+    df["sin_hour"] = np.sin(2 * np.pi * hour / 24.0)
+    df["cos_hour"] = np.cos(2 * np.pi * hour / 24.0)
+    df["sin_doy"] = np.sin(2 * np.pi * day_of_year / 365.25)
+    df["cos_doy"] = np.cos(2 * np.pi * day_of_year / 365.25)
 
-    # Physics-aware/night features
-    cosz = np.cos(np.deg2rad(df["zenith"].clip(lower=0, upper=180)))
-    df["cos_zenith"] = np.clip(cosz, 0.0, 1.0)
-    df["is_daylight"] = (df["zenith"] < 90.0).astype(float)
+    # day/night features
+    cos_zenith = np.cos(np.deg2rad(df["solar_zenith_angle"].clip(0, 180)))
+    df["cos_zenith"] = np.clip(cos_zenith, 0.0, 1.0)
+    df["is_daylight"] = (df["cos_zenith"] > 0.0).astype(float)
 
-    # Lags and ramps for cloud-driven changes
+    # lag and rolling features
     df["ghi_lag_1"] = df["ghi"].shift(1)
     df["ghi_lag_2"] = df["ghi"].shift(2)
+    df["ghi_lag_3"] = df["ghi"].shift(3)
     df["ghi_lag_24"] = df["ghi"].shift(24)
     df["ghi_diff_1"] = df["ghi"] - df["ghi"].shift(1)
     df["ghi_diff_3"] = df["ghi"] - df["ghi"].shift(3)
-    df["temp_diff_1"] = df["temp"] - df["temp"].shift(1)
-    df["rh_diff_1"] = df["rh"] - df["rh"].shift(1)
+    df["ghi_roll_mean_3"] = df["ghi"].rolling(window=3).mean()
+    df["ghi_roll_mean_6"] = df["ghi"].rolling(window=6).mean()
+    df["ghi_roll_mean_24"] = df["ghi"].rolling(window=24).mean()
+    df["ghi_roll_std_6"] = df["ghi"].rolling(window=6).std()
+    df["ghi_roll_std_24"] = df["ghi"].rolling(window=24).std()
 
-    # Rolling context
-    df["ghi_roll_mean_3"] = df["ghi"].rolling(3).mean()
-    df["ghi_roll_mean_6"] = df["ghi"].rolling(6).mean()
-    df["ghi_roll_mean_24"] = df["ghi"].rolling(24).mean()
-    df["ghi_roll_std_6"] = df["ghi"].rolling(6).std()
-    df["ghi_roll_std_24"] = df["ghi"].rolling(24).std()
-    df["wind_roll_mean_6"] = df["wind"].rolling(6).mean()
-    df["rh_roll_mean_6"] = df["rh"].rolling(6).mean()
-
-    # Fill missing values from lag/rolling operations
+    # fill missing values from lag/rolling and any source gaps
     df = df.ffill().bfill()
     return df
 
 
 @dataclass
-class DatasetBundle:
+class DataBundle:
     X_train: np.ndarray
     y_train: np.ndarray
-    w_train: np.ndarray
     X_val: np.ndarray
     y_val: np.ndarray
+    y_val_scaled: np.ndarray
+    y_val_raw: np.ndarray
+    last_ghi_val: np.ndarray
+    is_daylight_val: np.ndarray
     X_test: np.ndarray
-    y_test: np.ndarray
+    y_test_scaled: np.ndarray
     y_test_raw: np.ndarray
-    daylight_test_next: np.ndarray
-    target_scaler: StandardScaler
-    feature_names: List[str]
-    train_peak_threshold: float
+    test_timestamps: np.ndarray
+    last_ghi_test: np.ndarray
+    is_daylight_test: np.ndarray
+    target_scaler: MinMaxScaler
+    peak_threshold_raw: float
 
 
-def make_supervised_dataset(
+@tf.keras.utils.register_keras_serializable()
+def peak_weighted_huber_loss(y_true, y_pred):
+    """
+    Shape-safe dynamic weighting computed inside the graph.
+    No external sample_weight array required.
+    Assumes target is MinMax-scaled to [0, 1].
+    """
+    huber = tf.keras.losses.Huber(
+        delta=0.15, reduction=tf.keras.losses.Reduction.NONE
+    )
+    base = huber(y_true, y_pred)  # (batch,)
+
+    y_clip = tf.clip_by_value(y_true, 0.0, 1.0)
+    y_flat = tf.squeeze(y_clip, axis=-1)  # (batch,)
+
+    # Moderate peak emphasis to avoid over-sharp midday-only spikes.
+    weights = 1.0 + 1.8 * tf.pow(y_flat, 1.25)
+
+    # Downweight night/near-zero targets to avoid collapse-to-zero bias.
+    night_mask = y_flat < 0.02
+    weights = tf.where(night_mask, 0.60, weights)
+
+    return tf.reduce_mean(base * weights)
+
+
+def build_sequences(
     df: pd.DataFrame,
-    sequence_length: int = 48,
-    train_ratio: float = 0.70,
+    sequence_length: int = 24,
+    train_ratio: float = 0.7,
     val_ratio: float = 0.15,
-) -> DatasetBundle:
-    # Features used by model
+) -> DataBundle:
     feature_cols = [
-        "ghi", "temp", "rh", "wind", "pressure", "zenith", "cos_zenith", "is_daylight",
-        "hour_sin", "hour_cos", "doy_sin", "doy_cos",
-        "ghi_lag_1", "ghi_lag_2", "ghi_lag_24",
-        "ghi_diff_1", "ghi_diff_3", "temp_diff_1", "rh_diff_1",
-        "ghi_roll_mean_3", "ghi_roll_mean_6", "ghi_roll_mean_24",
-        "ghi_roll_std_6", "ghi_roll_std_24", "wind_roll_mean_6", "rh_roll_mean_6",
+        "ghi",
+        "temperature",
+        "relative_humidity",
+        "wind_speed",
+        "pressure",
+        "solar_zenith_angle",
+        "hour",
+        "sin_hour",
+        "cos_hour",
+        "sin_doy",
+        "cos_doy",
+        "cos_zenith",
+        "is_daylight",
+        "ghi_lag_1",
+        "ghi_lag_2",
+        "ghi_lag_3",
+        "ghi_lag_24",
+        "ghi_diff_1",
+        "ghi_diff_3",
+        "ghi_roll_mean_3",
+        "ghi_roll_mean_6",
+        "ghi_roll_mean_24",
+        "ghi_roll_std_6",
+        "ghi_roll_std_24",
     ]
-    for col in feature_cols:
-        if col not in df.columns:
-            raise ValueError(f"Feature '{col}' missing in engineered dataframe.")
 
-    values = df[feature_cols].to_numpy(dtype=np.float32)
-    target_raw = df["ghi"].to_numpy(dtype=np.float32)
-    daylight = df["is_daylight"].to_numpy(dtype=np.float32)
-    ghi_diff_abs = np.abs(df["ghi_diff_1"].to_numpy(dtype=np.float32))
+    X_raw = df[feature_cols].to_numpy(dtype=np.float32)
+    y_raw = df["ghi"].to_numpy(dtype=np.float32)
+    is_daylight = df["is_daylight"].to_numpy(dtype=np.float32)
 
     n = len(df)
-    n_train = int(n * train_ratio)
-    n_val = int(n * val_ratio)
-    n_test = n - n_train - n_val
-    if min(n_train, n_val, n_test) <= sequence_length + 2:
-        raise ValueError("Dataset split too small for chosen sequence length.")
+    train_end = int(n * train_ratio)
+    val_end = int(n * (train_ratio + val_ratio))
 
-    # Fit scalers on train only (prevents leakage)
-    X_scaler = RobustScaler()
-    X_scaler.fit(values[:n_train])
-    X_scaled = X_scaler.transform(values).astype(np.float32)
+    if train_end <= sequence_length + 10 or val_end <= train_end + 10 or n <= val_end + 10:
+        raise ValueError("Not enough rows for requested sequence length and split.")
 
-    # Target scaler fit on daytime training targets (better dynamic range for useful signal)
-    train_day_mask = (daylight[:n_train] > 0.5)
-    y_scaler = StandardScaler()
-    y_scaler.fit(target_raw[:n_train][train_day_mask].reshape(-1, 1))
-    y_scaled = y_scaler.transform(target_raw.reshape(-1, 1)).astype(np.float32).reshape(-1)
+    # leakage-safe scaling: fit only on train rows
+    x_scaler = StandardScaler()
+    X_train_rows = X_raw[:train_end]
+    x_scaler.fit(X_train_rows)
+    X_scaled = x_scaler.transform(X_raw).astype(np.float32)
 
-    # Build sequences and aligned metadata
+    target_scaler = MinMaxScaler(feature_range=(0, 1))
+    target_scaler.fit(y_raw[:train_end].reshape(-1, 1))
+    y_scaled = target_scaler.transform(y_raw.reshape(-1, 1)).astype(np.float32).reshape(-1)
+
     X_seq, y_seq = [], []
-    y_raw_seq, daylight_next, ramp_next, last_ghi = [], [], [], []
+    y_raw_seq = []
+    day_seq = []
+    last_ghi_seq = []
+    target_indices = []
+    timestamp_values = df["timestamp"].to_numpy()
 
-    for i in range(sequence_length, len(X_scaled)):
+    for i in range(sequence_length, n):
         X_seq.append(X_scaled[i - sequence_length:i, :])
         y_seq.append(y_scaled[i])
-        y_raw_seq.append(target_raw[i])
-        daylight_next.append(daylight[i])
-        ramp_next.append(ghi_diff_abs[i])
-        last_ghi.append(target_raw[i - 1])
+        y_raw_seq.append(y_raw[i])
+        day_seq.append(is_daylight[i])
+        last_ghi_seq.append(y_raw[i - 1])
+        target_indices.append(i)
 
     X_seq = np.asarray(X_seq, dtype=np.float32)
     y_seq = np.asarray(y_seq, dtype=np.float32).reshape(-1, 1)
-    y_raw_seq = np.asarray(y_raw_seq, dtype=np.float32).reshape(-1, 1)
-    daylight_next = np.asarray(daylight_next, dtype=np.float32).reshape(-1, 1)
-    ramp_next = np.asarray(ramp_next, dtype=np.float32).reshape(-1, 1)
-    last_ghi = np.asarray(last_ghi, dtype=np.float32).reshape(-1, 1)
+    y_raw_seq = np.asarray(y_raw_seq, dtype=np.float32).reshape(-1)
+    day_seq = np.asarray(day_seq, dtype=np.float32).reshape(-1)
+    last_ghi_seq = np.asarray(last_ghi_seq, dtype=np.float32).reshape(-1)
+    target_indices = np.asarray(target_indices)
 
-    # Convert original split points to sequence indices
-    train_end = n_train - sequence_length
-    val_end = n_train + n_val - sequence_length
+    train_mask = target_indices < train_end
+    val_mask = (target_indices >= train_end) & (target_indices < val_end)
+    test_mask = target_indices >= val_end
 
-    X_train, y_train = X_seq[:train_end], y_seq[:train_end]
-    X_val, y_val = X_seq[train_end:val_end], y_seq[train_end:val_end]
-    X_test, y_test = X_seq[val_end:], y_seq[val_end:]
-    y_test_raw = y_raw_seq[val_end:]
-    daylight_test_next = daylight_next[val_end:]
+    X_train, y_train = X_seq[train_mask], y_seq[train_mask]
+    X_val, y_val = X_seq[val_mask], y_seq[val_mask]
+    y_val_scaled = y_seq[val_mask]
+    y_val_raw = y_raw_seq[val_mask]
+    last_ghi_val = last_ghi_seq[val_mask]
+    is_daylight_val = day_seq[val_mask]
+    X_test, y_test_scaled = X_seq[test_mask], y_seq[test_mask]
+    y_test_raw = y_raw_seq[test_mask]
+    test_timestamps = timestamp_values[target_indices[test_mask]]
+    last_ghi_test = last_ghi_seq[test_mask]
+    is_daylight_test = day_seq[test_mask]
 
-    y_train_raw = y_raw_seq[:train_end]
-    ramp_train = ramp_next[:train_end]
-    last_ghi_train = last_ghi[:train_end]
+    y_train_raw = y_raw_seq[train_mask]
+    day_train = day_seq[train_mask]
 
-    # Peak/ramp-aware sample weights
-    peak_thr = float(np.percentile(y_train_raw[y_train_raw > 0], 90))
-    ramp_thr = float(np.percentile(ramp_train, 85))
+    day_train_values = y_train_raw[day_train > 0.5]
+    if day_train_values.size > 0:
+        peak_threshold_raw = float(np.percentile(day_train_values, 90))
+    else:
+        peak_threshold_raw = float(np.percentile(y_train_raw, 90))
 
-    w_train = np.ones_like(y_train_raw, dtype=np.float32)
-    w_train += 1.6 * (y_train_raw >= peak_thr).astype(np.float32)  # emphasize peaks
-    w_train += 1.2 * (ramp_train >= ramp_thr).astype(np.float32)   # emphasize sudden changes
-    w_train += 0.6 * (last_ghi_train >= peak_thr).astype(np.float32)
-    w_train *= np.where(y_train_raw < 5.0, 0.25, 1.0).astype(np.float32)  # downweight easy nighttime zeros
-    w_train = np.clip(w_train, 0.2, 4.5).reshape(-1)
-
-    return DatasetBundle(
+    return DataBundle(
         X_train=X_train,
         y_train=y_train,
-        w_train=w_train,
         X_val=X_val,
         y_val=y_val,
+        y_val_scaled=y_val_scaled,
+        y_val_raw=y_val_raw,
+        last_ghi_val=last_ghi_val,
+        is_daylight_val=is_daylight_val,
         X_test=X_test,
-        y_test=y_test,
+        y_test_scaled=y_test_scaled,
         y_test_raw=y_test_raw,
-        daylight_test_next=daylight_test_next.reshape(-1),
-        target_scaler=y_scaler,
-        feature_names=feature_cols,
-        train_peak_threshold=peak_thr,
+        test_timestamps=test_timestamps,
+        last_ghi_test=last_ghi_test,
+        is_daylight_test=is_daylight_test,
+        target_scaler=target_scaler,
+        peak_threshold_raw=peak_threshold_raw
     )
 
 
-# ---------------------------
-# Model
-# ---------------------------
-def build_cnn_bilstm_attention_model(
-    sequence_length: int,
-    n_features: int,
-    learning_rate: float = 1e-3,
-) -> keras.Model:
-    inp = keras.Input(shape=(sequence_length, n_features), name="history")
-    x = layers.LayerNormalization()(inp)
+def build_model(sequence_length: int, num_features: int, learning_rate: float) -> keras.Model:
+    inputs = keras.Input(shape=(sequence_length, num_features))
+    x = layers.LSTM(64, return_sequences=True)(inputs)
+    x = layers.Dropout(0.2)(x)
+    x = layers.LSTM(32, return_sequences=False)(x)
+    x = layers.Dropout(0.2)(x)
+    x = layers.Dense(16, activation="relu")(x)
+    # Target is MinMax-scaled to [0, 1], so sigmoid is a stable bounded head.
+    outputs = layers.Dense(1, activation="sigmoid")(x)
 
-    # Local temporal patterns (spikes/ramp segments)
-    x = layers.Conv1D(64, kernel_size=3, padding="causal", activation="swish")(x)
-    x = layers.Conv1D(64, kernel_size=5, padding="causal", dilation_rate=2, activation="swish")(x)
-    x = layers.Dropout(0.15)(x)
-
-    # Longer dependencies
-    x = layers.Bidirectional(
-        layers.LSTM(96, return_sequences=True, dropout=0.20, recurrent_dropout=0.0)
-    )(x)
-
-    # Self-attention to focus on important timesteps
-    attn = layers.MultiHeadAttention(num_heads=4, key_dim=24, dropout=0.10)(x, x)
-    x = layers.Add()([x, attn])
-    x = layers.LayerNormalization()(x)
-
-    # Robust temporal summary
-    avg_pool = layers.GlobalAveragePooling1D()(x)
-    max_pool = layers.GlobalMaxPooling1D()(x)
-    x = layers.Concatenate()([avg_pool, max_pool])
-
-    x = layers.Dense(128, activation="swish")(x)
-    x = layers.Dropout(0.30)(x)
-    x = layers.Dense(64, activation="swish")(x)
-    out = layers.Dense(1, name="ghi_next")(x)
-
-    model = keras.Model(inputs=inp, outputs=out, name="cnn_bilstm_attention_ghi")
+    model = keras.Model(inputs, outputs, name="ghi_lstm_refactored")
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-        loss=keras.losses.Huber(delta=1.0),
+        loss=peak_weighted_huber_loss,
         metrics=[keras.metrics.MeanAbsoluteError(name="mae")],
     )
     return model
 
 
-# ---------------------------
-# Train / evaluate / plot
-# ---------------------------
-def inverse_target(y_scaled: np.ndarray, scaler: StandardScaler) -> np.ndarray:
-    return scaler.inverse_transform(y_scaled.reshape(-1, 1)).reshape(-1)
-
-
-def evaluate_metrics(y_true: np.ndarray, y_pred: np.ndarray, peak_threshold: float) -> Dict[str, float]:
+def evaluate_metrics(y_true: np.ndarray, y_pred: np.ndarray, peak_threshold_raw: float) -> Dict[str, float]:
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     mae = float(mean_absolute_error(y_true, y_pred))
     r2 = float(r2_score(y_true, y_pred))
 
-    peak_mask = y_true >= peak_threshold
-    if np.any(peak_mask):
-        peak_mae = float(mean_absolute_error(y_true[peak_mask], y_pred[peak_mask]))
-    else:
-        peak_mae = np.nan
+    daylight_mask = y_true > 10.0
+    day_rmse = float(np.sqrt(mean_squared_error(y_true[daylight_mask], y_pred[daylight_mask]))) if np.any(daylight_mask) else np.nan
+    day_mae = float(mean_absolute_error(y_true[daylight_mask], y_pred[daylight_mask])) if np.any(daylight_mask) else np.nan
 
-    return {"rmse": rmse, "mae": mae, "r2": r2, "peak_mae": peak_mae}
+    peak_mask = y_true >= peak_threshold_raw
+    peak_mae = float(mean_absolute_error(y_true[peak_mask], y_pred[peak_mask])) if np.any(peak_mask) else np.nan
+    peak_rmse = float(np.sqrt(mean_squared_error(y_true[peak_mask], y_pred[peak_mask]))) if np.any(peak_mask) else np.nan
+
+    return {
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2,
+        "day_rmse": day_rmse,
+        "day_mae": day_mae,
+        "peak_mae": peak_mae,
+        "peak_rmse": peak_rmse,
+    }
 
 
-def plot_predictions(y_true: np.ndarray, y_pred: np.ndarray, metrics: Dict[str, float], n_hours: int = 400) -> None:
-    n = min(n_hours, len(y_true))
-    xs = np.arange(n)
+def _best_blend_from_validation(
+    y_val_true_raw: np.ndarray,
+    y_val_pred_raw: np.ndarray,
+    last_ghi_val: np.ndarray,
+    is_daylight_val: np.ndarray,
+    blend_min: float = 0.0,
+    blend_max: float = 0.5,
+    step: float = 0.05,
+) -> float:
+    daylight_mask = is_daylight_val > 0.5
+    if not np.any(daylight_mask):
+        return 0.25
 
-    fig, axes = plt.subplots(2, 1, figsize=(15, 10), sharex=False)
+    candidates = np.arange(blend_min, blend_max + 0.5 * step, step)
+    best_blend = float(candidates[0])
+    best_score = np.inf
 
-    axes[0].plot(xs, y_true[:n], label="Actual GHI", color="#1f77b4", linewidth=1.9)
-    axes[0].plot(xs, y_pred[:n], label="Predicted GHI", color="#ff7f0e", linewidth=1.9, alpha=0.95)
-    axes[0].fill_between(xs, y_true[:n], y_pred[:n], color="#ff7f0e", alpha=0.12, label="Error")
-    axes[0].set_title("Next-hour GHI Forecast (first test segment)")
-    axes[0].set_ylabel("GHI (W/m^2)")
-    axes[0].grid(True, linestyle="--", alpha=0.35)
-    axes[0].legend(loc="upper right")
+    for blend in candidates:
+        blended = (1.0 - blend) * y_val_pred_raw + blend * last_ghi_val
+        blended = np.clip(blended, 0.0, None)
+        score = mean_absolute_error(y_val_true_raw[daylight_mask], blended[daylight_mask])
+        if score < best_score:
+            best_score = score
+            best_blend = float(blend)
 
-    # Scatter with ideal line to inspect peak underestimation bias
-    axes[1].scatter(y_true, y_pred, s=8, alpha=0.25, color="#2ca02c")
-    max_v = max(float(np.max(y_true)), float(np.max(y_pred)))
-    axes[1].plot([0, max_v], [0, max_v], "r--", linewidth=1.2, label="Ideal y=x")
-    axes[1].set_title("Prediction calibration (all test points)")
-    axes[1].set_xlabel("Actual GHI (W/m^2)")
-    axes[1].set_ylabel("Predicted GHI (W/m^2)")
-    axes[1].grid(True, linestyle="--", alpha=0.3)
-    axes[1].legend(loc="upper left")
+    return best_blend
 
-    txt = (
-        f"RMSE: {metrics['rmse']:.2f} W/m^2\n"
-        f"MAE: {metrics['mae']:.2f} W/m^2\n"
-        f"R^2: {metrics['r2']:.3f}\n"
-        f"Peak-MAE: {metrics['peak_mae']:.2f} W/m^2"
-    )
-    fig.text(
-        0.79,
-        0.83,
-        txt,
-        fontsize=10,
-        bbox={"boxstyle": "round,pad=0.4", "facecolor": "white", "alpha": 0.88, "edgecolor": "#666"},
-    )
-    fig.tight_layout()
+
+def plot_three_day_window(y_true: np.ndarray, y_pred: np.ndarray) -> None:
+    # pick a 72-hour window centered around the highest true GHI point in test set.
+    peak_idx = int(np.argmax(y_true))
+    start = max(0, peak_idx - 24)
+    end = min(len(y_true), start + 72)
+    start = max(0, end - 72)
+
+    x = np.arange(start, end)
+    plt.figure(figsize=(14, 5))
+    plt.plot(x, y_true[start:end], label="Actual GHI", linewidth=2.0, color="#1f77b4")
+    plt.plot(x, y_pred[start:end], label="Predicted GHI", linewidth=2.0, color="#ff7f0e")
+    plt.fill_between(x, y_true[start:end], y_pred[start:end], alpha=0.12, color="#ff7f0e")
+    plt.title("3-Day Window Around Peak (72 Hours): Actual vs Predicted")
+    plt.xlabel("Test Sample Index (Hourly)")
+    plt.ylabel("GHI (W/m^2)")
+    plt.grid(True, linestyle="--", alpha=0.35)
+    plt.legend()
+    plt.tight_layout()
     plt.show()
 
 
-def train_and_evaluate(
+def save_thirty_day_plot(
+    timestamps: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    output_path: str,
+    prediction_days: int = 30,
+) -> None:
+    points = min(len(y_true), prediction_days * 24)
+    if points <= 0:
+        raise ValueError("No samples available to render 30-day plot.")
+
+    ts = pd.to_datetime(timestamps[:points])
+    plt.figure(figsize=(15, 5))
+    plt.plot(ts, y_true[:points], label="Actual GHI", linewidth=1.8, color="#1f77b4")
+    plt.plot(ts, y_pred[:points], label="Predicted GHI", linewidth=1.8, color="#ff7f0e")
+    plt.title(f"{prediction_days}-Day Forecast Horizon: Actual vs Predicted")
+    plt.xlabel("Timestamp")
+    plt.ylabel("GHI (W/m^2)")
+    plt.grid(True, linestyle="--", alpha=0.35)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+
+
+def run_pipeline(
     data_path: str,
     sequence_length: int = 48,
-    epochs: int = 60,
+    epochs: int = 80,
     batch_size: int = 128,
     learning_rate: float = 1e-3,
+    persistence_blend: float = -1.0,
+    prediction_days: int = 30,
+    plot_output_path: str = "prediction_30_days.png",
     seed: int = 42,
     no_plot: bool = False,
 ) -> None:
@@ -452,26 +499,32 @@ def train_and_evaluate(
     tf.keras.backend.clear_session()
 
     df = build_feature_table(data_path)
-    bundle = make_supervised_dataset(df, sequence_length=sequence_length)
-
-    model = build_cnn_bilstm_attention_model(
+    bundle = build_sequences(
+        df=df,
         sequence_length=sequence_length,
-        n_features=bundle.X_train.shape[-1],
-        learning_rate=learning_rate,
+        train_ratio=0.7,
+        val_ratio=0.15,
+    )
+
+    model = build_model(
+        sequence_length=sequence_length,
+        num_features=bundle.X_train.shape[-1],
+        learning_rate=learning_rate
     )
     model.summary()
 
     callbacks = [
         keras.callbacks.EarlyStopping(
             monitor="val_loss",
-            patience=10,
+            patience=12,
             restore_best_weights=True,
             min_delta=1e-4,
+            verbose=1,
         ),
         keras.callbacks.ReduceLROnPlateau(
             monitor="val_loss",
             factor=0.5,
-            patience=4,
+            patience=5,
             min_lr=1e-5,
             verbose=1,
         ),
@@ -480,49 +533,88 @@ def train_and_evaluate(
     history = model.fit(
         bundle.X_train,
         bundle.y_train,
-        sample_weight=bundle.w_train,
         validation_data=(bundle.X_val, bundle.y_val),
         epochs=epochs,
         batch_size=batch_size,
-        verbose=1,
-        callbacks=callbacks,
         shuffle=True,
+        callbacks=callbacks,
+        verbose=1,
     )
 
-    y_pred_scaled = model.predict(bundle.X_test, batch_size=batch_size, verbose=0).reshape(-1)
-    y_true_scaled = bundle.y_test.reshape(-1)
+    val_pred_scaled = model.predict(bundle.X_val, batch_size=batch_size, verbose=0).reshape(-1, 1)
+    pred_scaled = model.predict(bundle.X_test, batch_size=batch_size, verbose=0).reshape(-1, 1)
+    y_test_scaled = bundle.y_test_scaled.reshape(-1, 1)
+    y_val_scaled = bundle.y_val_scaled.reshape(-1, 1)
 
-    y_pred = inverse_target(y_pred_scaled, bundle.target_scaler)
-    y_true = inverse_target(y_true_scaled, bundle.target_scaler)
+    # correct inverse-transform with the same train-fitted target scaler
+    val_pred_raw = bundle.target_scaler.inverse_transform(val_pred_scaled).reshape(-1)
+    y_val_true_raw = bundle.target_scaler.inverse_transform(y_val_scaled).reshape(-1)
+    pred_raw = bundle.target_scaler.inverse_transform(pred_scaled).reshape(-1)
+    y_true_raw = bundle.target_scaler.inverse_transform(y_test_scaled).reshape(-1)
 
-    # Physics-informed postprocessing: no irradiance at night
-    y_pred = np.clip(y_pred, 0.0, None)
-    y_pred[bundle.daylight_test_next < 0.5] = 0.0
+    # Auto-tune blend on validation when negative value is passed.
+    # 0.0 = pure model, 1.0 = pure persistence.
+    if persistence_blend < 0.0:
+        persistence_blend = _best_blend_from_validation(
+            y_val_true_raw=y_val_true_raw,
+            y_val_pred_raw=val_pred_raw,
+            last_ghi_val=bundle.last_ghi_val,
+            is_daylight_val=bundle.is_daylight_val,
+            blend_min=0.0,
+            blend_max=0.5,
+            step=0.05,
+        )
+    persistence_blend = float(np.clip(persistence_blend, 0.0, 1.0))
+    pred_raw = (1.0 - persistence_blend) * pred_raw + persistence_blend * bundle.last_ghi_test
 
-    metrics = evaluate_metrics(y_true, y_pred, peak_threshold=bundle.train_peak_threshold)
-    print("\nTest Metrics:")
+    # enforce physics: no negative irradiance
+    pred_raw = np.clip(pred_raw, 0.0, None)
+
+    metrics = evaluate_metrics(y_true_raw, pred_raw, bundle.peak_threshold_raw)
+
+    print("\n===== DEBUG CHECKS ====x=")
+    print(f"Pred min/max: {pred_raw.min():.3f} / {pred_raw.max():.3f} W/m^2")
+    print(f"True min/max: {y_true_raw.min():.3f} / {y_true_raw.max():.3f} W/m^2")
+
+    print("\n===== TEST METRICS =====")
     print(f"RMSE: {metrics['rmse']:.2f} W/m^2")
     print(f"MAE : {metrics['mae']:.2f} W/m^2")
     print(f"R^2 : {metrics['r2']:.4f}")
-    print(f"Peak-MAE (>=P90 train daytime): {metrics['peak_mae']:.2f} W/m^2")
+    print(f"Day RMSE (GHI>10): {metrics['day_rmse']:.2f} W/m^2")
+    print(f"Day MAE  (GHI>10): {metrics['day_mae']:.2f} W/m^2")
+    print(f"Peak MAE (>=train daytime P90): {metrics['peak_mae']:.2f} W/m^2")
+    print(f"Peak RMSE(>=train daytime P90): {metrics['peak_rmse']:.2f} W/m^2")
+    print(f"Persistence blend used: {persistence_blend:.2f}")
 
-    # Daylight-only diagnostic
-    day_mask = bundle.daylight_test_next >= 0.5
-    if np.any(day_mask):
-        day_rmse = np.sqrt(mean_squared_error(y_true[day_mask], y_pred[day_mask]))
-        day_mae = mean_absolute_error(y_true[day_mask], y_pred[day_mask])
-        print(f"Daylight RMSE: {day_rmse:.2f} W/m^2")
-        print(f"Daylight MAE : {day_mae:.2f} W/m^2")
+    save_thirty_day_plot(
+        timestamps=bundle.test_timestamps,
+        y_true=y_true_raw,
+        y_pred=pred_raw,
+        output_path=plot_output_path,
+        prediction_days=prediction_days,
+    )
+    print(f"Saved {prediction_days}-day prediction graph to: {plot_output_path}")
 
     if not no_plot:
-        plot_predictions(y_true, y_pred, metrics=metrics, n_hours=400)
+        plot_three_day_window(y_true_raw, pred_raw)
 
-    # Optional: visualize training curves
-    if not no_plot:
+        # optional full-test diagnostic plot
+        n = min(len(y_true_raw), 500)
+        plt.figure(figsize=(14, 5))
+        plt.plot(y_true_raw[:n], label="Actual GHI", linewidth=1.8)
+        plt.plot(pred_raw[:n], label="Predicted GHI", linewidth=1.8)
+        plt.title("First 500 Test Hours: Actual vs Predicted")
+        plt.xlabel("Test Sample Index")
+        plt.ylabel("GHI (W/m^2)")
+        plt.grid(True, linestyle="--", alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
         plt.figure(figsize=(10, 4))
         plt.plot(history.history["loss"], label="Train loss")
         plt.plot(history.history["val_loss"], label="Val loss")
-        plt.title("Training/Validation Loss (Huber)")
+        plt.title("Training Curves (Weighted Huber)")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.grid(True, linestyle="--", alpha=0.3)
@@ -532,27 +624,36 @@ def train_and_evaluate(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Peak-aware TensorFlow model for NSRDB hourly GHI prediction."
-    )
-    parser.add_argument("--data-path", type=str, default="dataset", help="CSV file or folder of NSRDB CSVs.")
-    parser.add_argument("--sequence-length", type=int, default=48, help="History window in hours.")
-    parser.add_argument("--epochs", type=int, default=60, help="Max training epochs.")
+    parser = argparse.ArgumentParser(description="Refactored LSTM pipeline for NSRDB GHI forecasting.")
+    parser.add_argument("--data-path", type=str, default="dataset", help="Folder or single NSRDB CSV path.")
+    parser.add_argument("--sequence-length", type=int, default=48, help="Past hours used to predict next hour.")
+    parser.add_argument("--epochs", type=int, default=80, help="Max training epochs.")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size.")
-    parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam learning rate.")
+    parser.add_argument("--learning-rate", type=float, default=1e-3, help="Initial learning rate.")
+    parser.add_argument(
+        "--persistence-blend",
+        type=float,
+        default=-1.0,
+        help="Blend weight for persistence baseline. Use negative value for auto-tune on validation.",
+    )
+    parser.add_argument("--prediction-days", type=int, default=30, help="Number of days to include in saved forecast plot.")
+    parser.add_argument("--plot-output", type=str, default="prediction_30_days.png", help="File path for saved prediction plot.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--no-plot", action="store_true", help="Disable plots.")
+    parser.add_argument("--no-plot", action="store_true", help="Disable plotting.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    train_and_evaluate(
+    run_pipeline(
         data_path=args.data_path,
         sequence_length=args.sequence_length,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        persistence_blend=args.persistence_blend,
+        prediction_days=args.prediction_days,
+        plot_output_path=args.plot_output,
         seed=args.seed,
         no_plot=args.no_plot,
     )
