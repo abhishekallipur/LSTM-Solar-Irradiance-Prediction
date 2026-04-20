@@ -1,0 +1,19 @@
+Model Workspace
+
+baseline_lstm/
+  run.py -> launches ../..//lstm_model.py
+attention_lstm/
+  run.py -> launches ../..//attention_lstm_model.py
+analysis/
+  run.py -> launches ../..//correlation_heatmap.py
+
+default outputs in root:
+  prediction_30_days.png
+  pearson_correlation_heatmap.png
+  attention_actual_vs_pred.png
+  attention_weights.png
+
+Run examples:
+  python models\baseline_lstm\run.py --data-path .\dataset --no-plot
+  python models\attention_lstm\run.py --data-path .\dataset --no-plot
+  python models\analysis\run.py --data-path .\dataset --output pearson_correlation_heatmap.png

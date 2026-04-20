@@ -483,6 +483,38 @@ def save_thirty_day_plot(
     plt.close()
 
 
+def save_one_day_plot(
+    timestamps: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    output_path: str,
+    day_index: int = 0,
+) -> None:
+    points_per_day = 24
+    total_points = len(y_true)
+    if total_points <= 0:
+        raise ValueError("No samples available to render 1-day plot.")
+
+    start = max(0, day_index * points_per_day)
+    if start >= total_points:
+        start = max(0, total_points - points_per_day)
+    end = min(total_points, start + points_per_day)
+
+    ts = pd.to_datetime(timestamps[start:end])
+
+    plt.figure(figsize=(12, 4))
+    plt.plot(ts, y_true[start:end], label="Actual GHI", linewidth=2.0, color="#1f77b4")
+    plt.plot(ts, y_pred[start:end], label="Predicted GHI", linewidth=2.0, color="#ff7f0e")
+    plt.title("1-Day Forecast Horizon: Actual vs Predicted")
+    plt.xlabel("Timestamp")
+    plt.ylabel("GHI (W/m^2)")
+    plt.grid(True, linestyle="--", alpha=0.35)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+
+
 def run_pipeline(
     data_path: str,
     sequence_length: int = 48,
@@ -492,6 +524,8 @@ def run_pipeline(
     persistence_blend: float = -1.0,
     prediction_days: int = 30,
     plot_output_path: str = "prediction_30_days.png",
+    one_day_plot_output_path: str = "prediction_1_day.png",
+    one_day_start_index: int = 0,
     seed: int = 42,
     no_plot: bool = False,
 ) -> None:
@@ -595,6 +629,15 @@ def run_pipeline(
     )
     print(f"Saved {prediction_days}-day prediction graph to: {plot_output_path}")
 
+    save_one_day_plot(
+        timestamps=bundle.test_timestamps,
+        y_true=y_true_raw,
+        y_pred=pred_raw,
+        output_path=one_day_plot_output_path,
+        day_index=one_day_start_index,
+    )
+    print(f"Saved 1-day prediction graph to: {one_day_plot_output_path}")
+
     if not no_plot:
         plot_three_day_window(y_true_raw, pred_raw)
 
@@ -638,6 +681,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--prediction-days", type=int, default=30, help="Number of days to include in saved forecast plot.")
     parser.add_argument("--plot-output", type=str, default="prediction_30_days.png", help="File path for saved prediction plot.")
+    parser.add_argument("--one-day-plot-output", type=str, default="prediction_1_day.png", help="File path for saved 1-day prediction plot.")
+    parser.add_argument("--one-day-start-index", type=int, default=0, help="0-based day index within the test split for 1-day plot.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--no-plot", action="store_true", help="Disable plotting.")
     return parser.parse_args()
@@ -654,6 +699,8 @@ def main() -> None:
         persistence_blend=args.persistence_blend,
         prediction_days=args.prediction_days,
         plot_output_path=args.plot_output,
+        one_day_plot_output_path=args.one_day_plot_output,
+        one_day_start_index=args.one_day_start_index,
         seed=args.seed,
         no_plot=args.no_plot,
     )
