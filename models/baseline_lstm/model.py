@@ -523,6 +523,49 @@ def save_one_day_plot(
     plt.close()
 
 
+def save_training_improvement_plot(history: keras.callbacks.History, output_path: str) -> None:
+    _ensure_parent_dir(output_path)
+    epochs = np.arange(1, len(history.history.get("loss", [])) + 1)
+    if len(epochs) == 0:
+        return
+
+    train_loss = np.asarray(history.history.get("loss", []), dtype=float)
+    val_loss = np.asarray(history.history.get("val_loss", []), dtype=float)
+    train_mae = np.asarray(history.history.get("mae", []), dtype=float)
+    val_mae = np.asarray(history.history.get("val_mae", []), dtype=float)
+
+    best_val_loss = np.minimum.accumulate(val_loss) if val_loss.size else np.asarray([])
+
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, train_loss, label="Train Loss", linewidth=2.0)
+    if val_loss.size:
+        plt.plot(epochs, val_loss, label="Val Loss", linewidth=2.0)
+        plt.plot(epochs, best_val_loss, label="Best Val Loss So Far", linewidth=1.8, linestyle="--")
+    plt.title("Loss Improvement During Training")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.grid(True, linestyle="--", alpha=0.3)
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    if train_mae.size:
+        plt.plot(epochs, train_mae, label="Train MAE", linewidth=2.0)
+    if val_mae.size:
+        plt.plot(epochs, val_mae, label="Val MAE", linewidth=2.0)
+    plt.title("MAE Trend During Training")
+    plt.xlabel("Epoch")
+    plt.ylabel("MAE")
+    plt.grid(True, linestyle="--", alpha=0.3)
+    if train_mae.size or val_mae.size:
+        plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+
+
 def run_pipeline(
     data_path: str,
     sequence_length: int = 48,
@@ -533,6 +576,7 @@ def run_pipeline(
     prediction_days: int = 30,
     plot_output_path: str = "outputs/plots/prediction_30_days.png",
     one_day_plot_output_path: str = "outputs/plots/prediction_1_day.png",
+    training_progress_output_path: str = "outputs/plots/training_improvement.png",
     one_day_start_index: int = 0,
     seed: int = 42,
     no_plot: bool = False,
@@ -646,6 +690,9 @@ def run_pipeline(
     )
     print(f"Saved 1-day prediction graph to: {one_day_plot_output_path}")
 
+    save_training_improvement_plot(history, training_progress_output_path)
+    print(f"Saved training improvement graph to: {training_progress_output_path}")
+
     if not no_plot:
         plot_three_day_window(y_true_raw, pred_raw)
 
@@ -690,6 +737,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prediction-days", type=int, default=30, help="Number of days to include in saved forecast plot.")
     parser.add_argument("--plot-output", type=str, default="outputs/plots/prediction_30_days.png", help="File path for saved prediction plot.")
     parser.add_argument("--one-day-plot-output", type=str, default="outputs/plots/prediction_1_day.png", help="File path for saved 1-day prediction plot.")
+    parser.add_argument("--training-progress-plot-output", type=str, default="outputs/plots/training_improvement.png", help="File path for saved training improvement plot.")
     parser.add_argument("--one-day-start-index", type=int, default=0, help="0-based day index within the test split for 1-day plot.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--no-plot", action="store_true", help="Disable plotting.")
@@ -708,6 +756,7 @@ def main() -> None:
         prediction_days=args.prediction_days,
         plot_output_path=args.plot_output,
         one_day_plot_output_path=args.one_day_plot_output,
+        training_progress_output_path=args.training_progress_plot_output,
         one_day_start_index=args.one_day_start_index,
         seed=args.seed,
         no_plot=args.no_plot,

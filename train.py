@@ -1,10 +1,5 @@
-import sys
-
-from lstm_model import main
+from models.baseline_lstm.model import run_pipeline
 
 
 if __name__ == "__main__":
-    # Automation entrypoint: disable interactive windows unless explicitly overridden.
-    if "--no-plot" not in sys.argv:
-        sys.argv.append("--no-plot")
-    main()
+    run_pipeline(data_path="dataset", no_plot=True)
