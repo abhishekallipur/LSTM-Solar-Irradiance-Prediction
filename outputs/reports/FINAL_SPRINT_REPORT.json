@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-04-20T11:47:02.810164Z",
+  "winning_model": "Baseline (aggressive_peak_2x)",
+  "final_metrics": {
+    "rmse": 53.92,
+    "mae": 22.68,
+    "day_mae": 40.56,
+    "peak_mae": 21.47
+  },
+  "targets": {
+    "day_mae": 35.0,
+    "peak_mae": 25.0
+  },
+  "targets_met": {
+    "day_mae": false,
+    "peak_mae": true
+  },
+  "all_results": {
+    "Baseline (Current)": {
+      "RMSE": 54.07,
+      "MAE": 22.51,
+      "Day_MAE": 39.0,
+      "Peak_MAE": 25.0
+    },
+    "Baseline (Optimized Blend)": {
+      "RMSE": 54.07,
+      "MAE": 22.51,
+      "Day_MAE": 39.0,
+      "Peak_MAE": 25.0
+    },
+    "Baseline (aggressive_peak_2x)": {
+      "RMSE": 53.92,
+      "MAE": 22.68,
+      "Day_MAE": 40.56,
+      "Peak_MAE": 21.47
+    },
+    "Attention LSTM": {
+      "RMSE": 83.31,
+      "MAE": 33.53,
+      "Day_MAE": 62.61,
+      "Peak_MAE": 43.14
+    },
+    "Ensemble (Optimized)": {
+      "RMSE": 55.54,
+      "MAE": 22.82,
+      "Day_MAE": 39.9,
+      "Peak_MAE": 23.2
+    }
+  }
+}
