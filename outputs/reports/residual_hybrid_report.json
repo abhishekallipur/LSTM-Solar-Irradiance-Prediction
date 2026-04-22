@@ -1,0 +1,209 @@
+{
+  "reference_baseline": {
+    "RMSE": 53.92,
+    "MAE": 22.68,
+    "Day_MAE": 40.56,
+    "Peak_MAE": 21.47
+  },
+  "baseline_test": {
+    "rmse": 53.96718928692924,
+    "mae": 22.694528579711914,
+    "r2": 0.9721490740776062,
+    "day_mae": 40.624412536621094,
+    "peak_mae": 29.10422706604004
+  },
+  "residual_only_test": {
+    "rmse": 8.580161678717733,
+    "mae": 3.36915484524143,
+    "r2": 0.9747200066461519,
+    "day_mae": 5.7847824502714476,
+    "peak_mae": NaN
+  },
+  "hybrid_test": {
+    "rmse": 8.351298377973423,
+    "mae": 3.362840349111626,
+    "r2": 0.9993330585850877,
+    "day_mae": 6.541976115982803,
+    "peak_mae": 5.595632223277133
+  },
+  "peak_hour_metrics": {
+    "baseline_peak_hour_mae": 17.040340423583984,
+    "hybrid_peak_hour_mae": 1.5110776550275389
+  },
+  "regime_metrics": [
+    {
+      "regime": "clear",
+      "rmse": 9.372004448576046,
+      "mae": 6.0303057594303136,
+      "bias": 1.2802567157238693,
+      "count": 486
+    },
+    {
+      "regime": "partly_cloudy",
+      "rmse": 8.539057076874068,
+      "mae": 6.472924217395815,
+      "bias": -1.594655128031565,
+      "count": 55
+    },
+    {
+      "regime": "cloudy",
+      "rmse": 8.236486080890534,
+      "mae": 3.0511490147508544,
+      "bias": 0.21944673615272467,
+      "count": 4708
+    }
+  ],
+  "walk_forward": [
+    {
+      "learning_rate": 0.03,
+      "num_leaves": 31,
+      "min_child_samples": 20,
+      "feature_fraction": 0.85,
+      "subsample": 0.85,
+      "reg_alpha": 0.0,
+      "reg_lambda": 0.1,
+      "candidate": 1,
+      "cv_score": 16.16718150092871,
+      "cv_rmse": 13.986926548618534,
+      "cv_peak_mae": 10.731347094528022,
+      "cv_day_mae": 11.411057762619429
+    },
+    {
+      "learning_rate": 0.02,
+      "num_leaves": 63,
+      "min_child_samples": 15,
+      "feature_fraction": 0.9,
+      "subsample": 0.9,
+      "reg_alpha": 0.0,
+      "reg_lambda": 0.2,
+      "candidate": 2,
+      "cv_score": 17.2932606651363,
+      "cv_rmse": 15.01614796122758,
+      "cv_peak_mae": 11.156395448909691,
+      "cv_day_mae": 12.073067731445356
+    },
+    {
+      "learning_rate": 0.015,
+      "num_leaves": 127,
+      "min_child_samples": 30,
+      "feature_fraction": 0.8,
+      "subsample": 0.8,
+      "reg_alpha": 0.05,
+      "reg_lambda": 0.3,
+      "candidate": 3,
+      "cv_score": 17.986367395571023,
+      "cv_rmse": 15.67617851248657,
+      "cv_peak_mae": 11.258505546668955,
+      "cv_day_mae": 12.428261021682149
+    }
+  ],
+  "best_params": {
+    "learning_rate": 0.03,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "feature_fraction": 0.85,
+    "subsample": 0.85,
+    "reg_alpha": 0.0,
+    "reg_lambda": 0.1
+  },
+  "feature_importance_top": [
+    {
+      "feature": "ghi_diff_1",
+      "importance": 1288409386.6990197
+    },
+    {
+      "feature": "sin_hour",
+      "importance": 184484875.51017508
+    },
+    {
+      "feature": "baseline_pred",
+      "importance": 175737618.80995974
+    },
+    {
+      "feature": "residual_lag_1",
+      "importance": 148531849.7462975
+    },
+    {
+      "feature": "baseline_clear_sky_index",
+      "importance": 96577823.97425461
+    },
+    {
+      "feature": "ghi_diff_3",
+      "importance": 65495684.05210813
+    },
+    {
+      "feature": "solar_zenith_angle",
+      "importance": 49296082.05947813
+    },
+    {
+      "feature": "ghi_roll_mean_3",
+      "importance": 46647635.574999176
+    },
+    {
+      "feature": "relative_humidity",
+      "importance": 46191217.05766678
+    },
+    {
+      "feature": "solar_elevation",
+      "importance": 37251871.89370028
+    },
+    {
+      "feature": "ghi_roll_mean_6",
+      "importance": 36506519.72557863
+    },
+    {
+      "feature": "regime_prob_clear",
+      "importance": 36020351.2521588
+    },
+    {
+      "feature": "ghi_lag_1",
+      "importance": 34936255.8860232
+    },
+    {
+      "feature": "baseline_error_abs_lag_1",
+      "importance": 29861718.494225502
+    },
+    {
+      "feature": "cloud_cover_proxy",
+      "importance": 29437559.98620637
+    },
+    {
+      "feature": "ghi_roll_std_6",
+      "importance": 26784619.59423828
+    },
+    {
+      "feature": "residual_lag_24",
+      "importance": 21356636.23602295
+    },
+    {
+      "feature": "cos_hour",
+      "importance": 19697172.96237564
+    },
+    {
+      "feature": "baseline_error_lag_1",
+      "importance": 19688437.486111324
+    },
+    {
+      "feature": "hour_sin",
+      "importance": 19035628.33104515
+    }
+  ],
+  "artifacts": {
+    "report_json": "outputs/reports/residual_hybrid_report.json",
+    "predictions_csv": "outputs/reports/residual_hybrid_predictions.csv",
+    "cv_results_csv": "outputs/reports/residual_hybrid_walk_forward.csv",
+    "feature_importance_csv": "outputs/reports/residual_hybrid_feature_importance.csv",
+    "optional_models_csv": "outputs/reports/residual_hybrid_optional_models.csv",
+    "baseline_model_path": "outputs/artifacts/task_d_baseline_aggressive_peak_2x.h5",
+    "classifier_model_path": "outputs/artifacts/residual_regime_classifier.txt",
+    "regressor_dir": "outputs/artifacts/residual_regressor_ensemble",
+    "calibrator_path": "outputs/artifacts/residual_calibrator.joblib",
+    "metrics_plot": "outputs/plots/residual_hybrid_metrics.png",
+    "feature_plot": "outputs/plots/residual_hybrid_feature_importance.png",
+    "hour_plot": "outputs/plots/residual_hybrid_hour_errors.png",
+    "regime_plot": "outputs/plots/residual_hybrid_regime_errors.png",
+    "residual_plot": "outputs/plots/residual_hybrid_residual_distribution.png",
+    "cv_plot": "outputs/plots/residual_hybrid_walk_forward.png",
+    "scatter_plot": "outputs/plots/residual_hybrid_scatter.png"
+  }
+}
