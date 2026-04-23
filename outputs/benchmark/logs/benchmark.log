@@ -370,3 +370,81 @@ Outputs saved to: E:\OE casestudy\code\outputs\benchmark
 2026-04-23 20:01:45 | INFO     | benchmark.run |   Plots:   E:\OE casestudy\code\outputs\benchmark\plots
 2026-04-23 20:01:45 | INFO     | benchmark.run |   Models:  E:\OE casestudy\code\outputs\benchmark\artifacts
 2026-04-23 20:01:45 | INFO     | benchmark.run |   Logs:    E:\OE casestudy\code\outputs\benchmark\logs
+2026-04-23 23:36:47 | INFO     | benchmark.run | ======================================================================
+2026-04-23 23:36:47 | INFO     | benchmark.run | SOLAR IRRADIANCE BENCHMARKING FRAMEWORK v1.0
+2026-04-23 23:36:47 | INFO     | benchmark.run | ======================================================================
+2026-04-23 23:36:47 | INFO     | benchmark.run | Data path: dataset
+2026-04-23 23:36:47 | INFO     | benchmark.run | Output dir: E:\OE casestudy\code\outputs\benchmark
+2026-04-23 23:36:47 | INFO     | benchmark.run | Quick mode: False
+2026-04-23 23:36:47 | INFO     | benchmark.run | Seed: 42
+2026-04-23 23:36:47 | INFO     | benchmark.run | 
+>>> STEP 1: Loading data and engineering features
+2026-04-23 23:36:47 | INFO     | benchmark.data_loader | Loading NSRDB data from: dataset
+2026-04-23 23:36:48 | INFO     | benchmark.data_loader | Loaded 35064 rows × 25 columns  |  time range: 2018-01-01 00:00:00 → 2021-12-31 23:00:00
+2026-04-23 23:36:48 | INFO     | benchmark.features | Enriching features …
+2026-04-23 23:36:48 | INFO     | benchmark.features | Feature enrichment complete — 46 columns total
+2026-04-23 23:36:48 | INFO     | benchmark.run | Dataset: 35064 rows × 46 columns
+2026-04-23 23:36:48 | INFO     | benchmark.run | 
+>>> STEP 2: Creating chronological splits
+2026-04-23 23:36:48 | INFO     | benchmark.splitter | Tabular split — train: 24544  val: 5260  test: 5260  features: 43  peak_threshold: 515.7
+2026-04-23 23:36:48 | INFO     | benchmark.splitter | Sequence split — train: 24496  val: 5260  test: 5260  seq_len: 48  features: 28  peak: 516.5
+2026-04-23 23:36:48 | INFO     | benchmark.run | 
+>>> STEP 3: Running leakage audit
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ temporal_ordering: Timestamps are monotonically non-decreasing.
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ split_no_overlap: No temporal overlap between splits. train_max=2020-10-19T15:00:00.000000000  val_min=2020-10-19T16:00:00.000000000  val_max=2021-05-26T19:00:00.000000000  test_min=2021-05-26T20:00:00.000000000
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ no_future_features: ghi_lag_1 matches ghi.shift(1) — 0 mismatches in 35063 rows.
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ scaler_train_only: Scaler fit on 24544 samples (train size = 24544).
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ target_not_in_features: Target column 'ghi' is not in the tabular feature list.
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | ✓ no_backfill_after_split: No NaN in any target partition.
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | === ALL LEAKAGE CHECKS PASSED ===
+2026-04-23 23:36:48 | INFO     | benchmark.leakage_audit | Leakage audit report saved to: E:\OE casestudy\code\outputs\benchmark\reports\leakage_audit.json
+2026-04-23 23:36:48 | INFO     | benchmark.run | 
+>>> STEP 4: Instantiating models
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: GBT (LightGBM)
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: SVM (SVR-RBF)
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: ANN
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: DNN
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: LSTM
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: CNN-DNN
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: CNN-LSTM
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: CNN-A-LSTM
+2026-04-23 23:36:48 | INFO     | benchmark.run | Registered model: Hybrid Residual
+2026-04-23 23:36:48 | INFO     | benchmark.run | Models to train: ['GBT (LightGBM)', 'SVM (SVR-RBF)', 'ANN', 'DNN', 'LSTM', 'CNN-DNN', 'CNN-LSTM', 'CNN-A-LSTM', 'Hybrid Residual']
+2026-04-23 23:36:48 | INFO     | benchmark.run | 
+>>> STEP 5: Training models
+2026-04-23 23:36:48 | INFO     | benchmark.run | 
+--- Training: GBT (LightGBM) ---
+2026-04-23 23:36:48 | INFO     | benchmark.models.gbt | Training GBT (LightGBM) — n_estimators=2000, lr=0.0300
+2026-04-23 23:36:54 | INFO     | benchmark.models.gbt | GBT (LightGBM) training complete — best iteration: 1997
+2026-04-23 23:36:54 | INFO     | benchmark.robustness | GBT (LightGBM): sanitized 1536 / 5260 predictions  (NaN=0, neg=1536, exp=0, outlier=0)
+2026-04-23 23:36:54 | INFO     | benchmark.models.base | Saved GBT (LightGBM) metadata to E:\OE casestudy\code\outputs\benchmark\artifacts\gbt_lightgbm\meta.json
+2026-04-23 23:36:54 | INFO     | benchmark.models.gbt | Saved GBT model to E:\OE casestudy\code\outputs\benchmark\artifacts\gbt_lightgbm\gbt_model.txt
+2026-04-23 23:36:54 | INFO     | benchmark.run | GBT (LightGBM) done in 6.2s — RMSE: 6.86, MAE: 2.37, R²: 0.9996, Peak MAE: 5.06
+2026-04-23 23:36:54 | INFO     | benchmark.run | 
+--- Training: SVM (SVR-RBF) ---
+2026-04-23 23:36:54 | INFO     | benchmark.models.svm | Training SVM (SVR-RBF) — kernel=rbf, C=100.0, epsilon=0.100, max_samples=8000
+2026-04-23 23:36:54 | INFO     | benchmark.models.svm | SVR subsampled 24544 → 8458 samples (max_samples=8000)
+2026-04-23 23:36:54 | INFO     | benchmark.models.svm | SVM (SVR-RBF) training complete — 129 support vectors from 8458 samples
+2026-04-23 23:36:54 | INFO     | benchmark.robustness | SVM (SVR-RBF): sanitized 294 / 5260 predictions  (NaN=0, neg=294, exp=0, outlier=0)
+2026-04-23 23:36:54 | INFO     | benchmark.models.base | Saved SVM (SVR-RBF) metadata to E:\OE casestudy\code\outputs\benchmark\artifacts\svm_svr-rbf\meta.json
+2026-04-23 23:36:54 | INFO     | benchmark.models.svm | Saved SVM model to E:\OE casestudy\code\outputs\benchmark\artifacts\svm_svr-rbf\svm_model.pkl
+2026-04-23 23:36:54 | INFO     | benchmark.run | SVM (SVR-RBF) done in 0.2s — RMSE: 49.96, MAE: 41.12, R²: 0.9762, Peak MAE: 38.38
+2026-04-23 23:36:54 | INFO     | benchmark.run | 
+--- Training: ANN ---
+2026-04-23 23:36:54 | INFO     | benchmark.models.ann | Training ANN — layers=[128, 64], epochs=100
+2026-04-23 23:37:24 | INFO     | benchmark.models.ann | ANN training complete — best epoch: 30
+2026-04-23 23:37:24 | INFO     | benchmark.robustness | ANN: sanitized 294 / 5260 predictions  (NaN=0, neg=294, exp=0, outlier=0)
+2026-04-23 23:37:25 | INFO     | benchmark.models.base | Saved ANN metadata to E:\OE casestudy\code\outputs\benchmark\artifacts\ann\meta.json
+2026-04-23 23:37:25 | INFO     | benchmark.models.ann | Saved ANN model to E:\OE casestudy\code\outputs\benchmark\artifacts\ann\ann_model.h5
+2026-04-23 23:37:25 | INFO     | benchmark.run | ANN done in 30.3s — RMSE: 9.37, MAE: 6.59, R²: 0.9992, Peak MAE: 10.20
+2026-04-23 23:37:25 | INFO     | benchmark.run | 
+--- Training: DNN ---
+2026-04-23 23:37:25 | INFO     | benchmark.models.dnn | Training DNN — layers=[256, 128, 64, 32], bn=True, epochs=120
+2026-04-23 23:38:22 | INFO     | benchmark.models.dnn | DNN training complete — best epoch: 31
+2026-04-23 23:38:22 | INFO     | benchmark.robustness | DNN: sanitized 387 / 5260 predictions  (NaN=0, neg=387, exp=0, outlier=0)
+2026-04-23 23:38:22 | INFO     | benchmark.models.base | Saved DNN metadata to E:\OE casestudy\code\outputs\benchmark\artifacts\dnn\meta.json
+2026-04-23 23:38:22 | INFO     | benchmark.models.dnn | Saved DNN model to E:\OE casestudy\code\outputs\benchmark\artifacts\dnn\dnn_model.h5
+2026-04-23 23:38:22 | INFO     | benchmark.run | DNN done in 57.9s — RMSE: 13.12, MAE: 8.27, R²: 0.9984, Peak MAE: 11.33
+2026-04-23 23:38:22 | INFO     | benchmark.run | 
+--- Training: LSTM ---
+2026-04-23 23:38:22 | INFO     | benchmark.models.lstm | Training LSTM — units=[64, 32], seq_len=48, epochs=80

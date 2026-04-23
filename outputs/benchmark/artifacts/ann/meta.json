@@ -6,5 +6,5 @@
     64
   ],
   "dropout_rate": 0.2,
-  "epochs": 10
+  "epochs": 100
 }

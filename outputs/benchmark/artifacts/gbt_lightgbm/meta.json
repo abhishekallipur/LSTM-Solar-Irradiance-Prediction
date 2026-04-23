@@ -1,8 +1,8 @@
 {
   "name": "GBT (LightGBM)",
   "model_type": "tabular",
-  "n_estimators": 200,
+  "n_estimators": 2000,
   "learning_rate": 0.03,
   "num_leaves": 63,
-  "best_iteration": 200
+  "best_iteration": 1997
 }
