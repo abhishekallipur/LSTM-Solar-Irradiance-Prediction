@@ -142,13 +142,13 @@ class HybridArtifacts:
     classifier_model_path: str = "outputs/artifacts/residual_regime_classifier.txt"
     regressor_dir: str = "outputs/artifacts/residual_regressor_ensemble"
     calibrator_path: str = "outputs/artifacts/residual_calibrator.joblib"
-    metrics_plot: str = "outputs/plots/residual_hybrid_metrics.png"
-    feature_plot: str = "outputs/plots/residual_hybrid_feature_importance.png"
-    hour_plot: str = "outputs/plots/residual_hybrid_hour_errors.png"
-    regime_plot: str = "outputs/plots/residual_hybrid_regime_errors.png"
-    residual_plot: str = "outputs/plots/residual_hybrid_residual_distribution.png"
-    cv_plot: str = "outputs/plots/residual_hybrid_walk_forward.png"
-    scatter_plot: str = "outputs/plots/residual_hybrid_scatter.png"
+    metrics_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_metrics.png"
+    feature_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_feature_importance.png"
+    hour_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_hour_errors.png"
+    regime_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_regime_errors.png"
+    residual_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_residual_distribution.png"
+    cv_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_walk_forward.png"
+    scatter_plot: str = "outputs/plots/residual_hybrid/residual_hybrid_scatter.png"
 
 
 def build_baseline_ledger(

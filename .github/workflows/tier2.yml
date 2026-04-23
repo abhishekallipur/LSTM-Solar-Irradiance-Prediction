@@ -5,11 +5,11 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/tier2.yml'
-      - 'models/agent/tier2_automation.py'
-      - 'models/**'
-      - 'dataset/**'
-      - 'requirements.txt'
+      - ".github/workflows/tier2.yml"
+      - "models/agent/tier2_automation.py"
+      - "models/**"
+      - "dataset/**"
+      - "requirements.txt"
 
 jobs:
   tier2:

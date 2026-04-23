@@ -148,6 +148,7 @@
     "selected_days_csv": "outputs/reports/model_forecast_comparison_selected_days.csv",
     "summary_json": "outputs/reports/model_forecast_comparison_summary.json",
     "comparison_30d_plot": "outputs/plots/model_forecast_comparison_30_days.png",
+    "month_day_plot": "outputs/plots/model_forecast_month_day_comparison.png",
     "regime_plot": "outputs/plots/model_forecast_regime_mae.png",
     "forecast_day_prefix": "outputs/plots/model_forecast_day"
   },

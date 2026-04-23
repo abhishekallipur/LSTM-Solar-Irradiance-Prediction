@@ -21,14 +21,14 @@ import models.baseline_lstm.model as base
 @dataclass
 class Tier2Outputs:
     sequence_length_csv: str = "outputs/reports/sequence_length_sweep.csv"
-    sequence_length_plot: str = "outputs/plots/sequence_length_vs_metrics.png"
+    sequence_length_plot: str = "outputs/plots/sprint/sequence_length_vs_metrics.png"
     best_regularization_json: str = "outputs/reports/best_regularization_config.json"
-    regularization_plot: str = "outputs/plots/regularization_heatmap.png"
+    regularization_plot: str = "outputs/plots/sprint/regularization_heatmap.png"
     loss_variant_csv: str = "outputs/reports/loss_variant_results.csv"
-    loss_variant_plot: str = "outputs/plots/loss_variant_comparison.png"
+    loss_variant_plot: str = "outputs/plots/sprint/loss_variant_comparison.png"
     best_loss_config_py: str = "outputs/reports/best_loss_config.py"
     augmentation_csv: str = "outputs/reports/augmentation_results.csv"
-    augmentation_plot: str = "outputs/plots/augmentation_impact.png"
+    augmentation_plot: str = "outputs/plots/sprint/augmentation_impact.png"
     augmentation_pipeline_py: str = "outputs/reports/data_augmentation.py"
     log_file: str = "outputs/reports/tier2_log.txt"
 

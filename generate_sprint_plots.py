@@ -1,6 +1,6 @@
 """
 Generate comprehensive visualization plots from sprint results.
-Creates all charts from task artifacts and saves to outputs/plots/
+Creates all charts from task artifacts and saves to outputs/plots/sprint/
 """
 
 import os
@@ -16,7 +16,7 @@ plt.switch_backend('Agg')
 # Paths
 PROJECT_ROOT = Path(__file__).parent.resolve()
 REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
-PLOTS_DIR = PROJECT_ROOT / "outputs" / "plots"
+PLOTS_DIR = PROJECT_ROOT / "outputs" / "plots" / "sprint"
 ARTIFACTS_DIR = PROJECT_ROOT / "outputs" / "artifacts"
 
 # Ensure plots directory exists

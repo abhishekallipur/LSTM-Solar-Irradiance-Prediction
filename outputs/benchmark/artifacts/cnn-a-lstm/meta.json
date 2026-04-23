@@ -1,0 +1,14 @@
+{
+  "name": "CNN-A-LSTM",
+  "model_type": "sequence",
+  "conv_filters": [
+    64,
+    32
+  ],
+  "lstm_units": [
+    64,
+    32
+  ],
+  "attention_units": 32,
+  "epochs": 10
+}

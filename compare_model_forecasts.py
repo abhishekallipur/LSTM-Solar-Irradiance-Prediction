@@ -58,9 +58,10 @@ class ForecastComparisonArtifacts:
     regime_metrics_csv: str = "outputs/reports/model_forecast_comparison_regime_metrics.csv"
     selected_days_csv: str = "outputs/reports/model_forecast_comparison_selected_days.csv"
     summary_json: str = "outputs/reports/model_forecast_comparison_summary.json"
-    comparison_30d_plot: str = "outputs/plots/model_forecast_comparison_30_days.png"
-    regime_plot: str = "outputs/plots/model_forecast_regime_mae.png"
-    forecast_day_prefix: str = "outputs/plots/model_forecast_day"
+    comparison_30d_plot: str = "outputs/plots/comparison/model_forecast_comparison_30_days.png"
+    month_day_plot: str = "outputs/plots/comparison/model_forecast_month_day_comparison.png"
+    regime_plot: str = "outputs/plots/comparison/model_forecast_regime_mae.png"
+    forecast_day_prefix: str = "outputs/plots/comparison/model_forecast_day"
 
 
 def _ensure_parent_dir(path: str | Path) -> None:
@@ -452,6 +453,44 @@ def _plot_regime_metrics(regime_metrics: pd.DataFrame, output_path: str) -> None
     plt.close(fig)
 
 
+def _plot_month_and_day_comparison(month_frame: pd.DataFrame, day_frame: pd.DataFrame, output_path: str) -> None:
+    if month_frame.empty:
+        raise ValueError("Month comparison frame is empty.")
+    if day_frame.empty:
+        raise ValueError("Day comparison frame is empty.")
+
+    _ensure_parent_dir(output_path)
+    fig, axes = plt.subplots(2, 1, figsize=(18, 12), sharex=False)
+
+    def _plot_panel(ax: plt.Axes, frame: pd.DataFrame, title: str) -> None:
+        timestamps = pd.to_datetime(frame["timestamp"])
+        ax.plot(timestamps, frame["actual_ghi"], color="black", linewidth=2.4, label="Actual GHI")
+        for column in MODEL_COLUMNS:
+            ax.plot(
+                timestamps,
+                frame[column],
+                linewidth=1.8,
+                alpha=0.95,
+                color=MODEL_COLORS[column],
+                label=MODEL_LABELS[column],
+            )
+        ax.set_title(title)
+        ax.set_ylabel("GHI (W/m^2)")
+        ax.grid(True, alpha=0.3)
+        ax.legend(ncol=2, fontsize=9)
+
+    _plot_panel(axes[0], month_frame, "Month Window: Actual vs Predicted for All Models")
+    _plot_panel(axes[1], day_frame, "Single-Day Window: Actual vs Predicted for All Models")
+    axes[1].set_xlabel("Timestamp")
+
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+    axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _format_focus_name(label: str) -> str:
     return label.replace("_", "-")
 
@@ -517,10 +556,26 @@ def run_pipeline(
         title=f"{forecast_days}-Day Forecast Horizon: Actual vs All Models",
     )
 
+    if focus_month is not None:
+        month_window_source = common[common["month"] == focus_month].copy()
+        if month_window_source.empty:
+            month_window_source = common.copy()
+    else:
+        month_window_source = common.copy()
+    month_window = _window_for_horizon(month_window_source, forecast_days=forecast_days, start_date=focus_date)
+
     if focus_date:
         selected_days = {"selected": pd.to_datetime(focus_date).date().isoformat()}
     else:
         selected_days = _pick_representative_days(day_summary, month=focus_month)
+
+    if selected_days:
+        day_key = "selected" if "selected" in selected_days else ("mixed" if "mixed" in selected_days else next(iter(selected_days)))
+        day_window = _window_for_day(common, selected_days[day_key])
+    else:
+        day_window = _window_for_day(common, common.loc[0, "date"])
+
+    _plot_month_and_day_comparison(month_window, day_window, artifacts.month_day_plot)
 
     one_day_outputs: Dict[str, str] = {}
     for label, date_text in selected_days.items():
@@ -553,6 +608,7 @@ def run_pipeline(
             f"Day MAE {row['day_mae']:.2f}, Peak MAE {row['peak_mae']:.2f}"
         )
     print(f"Saved 30-day comparison to: {artifacts.comparison_30d_plot}")
+    print(f"Saved month/day comparison to: {artifacts.month_day_plot}")
     print(f"Saved regime comparison to: {artifacts.regime_plot}")
     if one_day_outputs:
         for label, path in one_day_outputs.items():
@@ -606,9 +662,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--regime-metrics-csv", type=str, default="outputs/reports/model_forecast_comparison_regime_metrics.csv", help="Output CSV for regime-based metrics.")
     parser.add_argument("--selected-days-csv", type=str, default="outputs/reports/model_forecast_comparison_selected_days.csv", help="Output CSV for the chosen day summary.")
     parser.add_argument("--summary-json", type=str, default="outputs/reports/model_forecast_comparison_summary.json", help="Summary JSON for the comparison run.")
-    parser.add_argument("--comparison-30d-plot", type=str, default="outputs/plots/model_forecast_comparison_30_days.png", help="Output plot for the 30-day comparison.")
-    parser.add_argument("--regime-plot", type=str, default="outputs/plots/model_forecast_regime_mae.png", help="Output plot for the regime metrics.")
-    parser.add_argument("--forecast-day-prefix", type=str, default="outputs/plots/model_forecast_day", help="Prefix for one-day comparison plots.")
+    parser.add_argument("--comparison-30d-plot", type=str, default="outputs/plots/comparison/model_forecast_comparison_30_days.png", help="Output plot for the 30-day comparison.")
+    parser.add_argument("--month-day-plot", type=str, default="outputs/plots/comparison/model_forecast_month_day_comparison.png", help="Output plot for the combined month/day comparison.")
+    parser.add_argument("--regime-plot", type=str, default="outputs/plots/comparison/model_forecast_regime_mae.png", help="Output plot for the regime metrics.")
+    parser.add_argument("--forecast-day-prefix", type=str, default="outputs/plots/comparison/model_forecast_day", help="Prefix for one-day comparison plots.")
     return parser.parse_args()
 
 
@@ -621,6 +678,7 @@ def main() -> None:
         selected_days_csv=args.selected_days_csv,
         summary_json=args.summary_json,
         comparison_30d_plot=args.comparison_30d_plot,
+        month_day_plot=args.month_day_plot,
         regime_plot=args.regime_plot,
         forecast_day_prefix=args.forecast_day_prefix,
     )
