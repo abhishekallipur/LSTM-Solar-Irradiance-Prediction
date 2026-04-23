@@ -14,6 +14,9 @@ code/
     testing/
       test_model.py
       run.py
+    residual_hybrid/
+      model.py
+      run.py
     agent/
       ghi_improvement_agent.py
   outputs/
@@ -27,6 +30,7 @@ Compatibility entry points kept in root:
   correlation_heatmap.py
   test_model.py
   ghi_improvement_agent.py
+  residual_hybrid_model.py
 
 Run examples:
   python models\baseline_lstm\run.py --data-path .\dataset --no-plot
@@ -34,3 +38,4 @@ Run examples:
   python models\analysis\run.py --data-path .\dataset --output outputs\plots\pearson_correlation_heatmap.png
   python models\testing\run.py
   python ghi_improvement_agent.py --data-path .\dataset --baseline-epochs 5 --attention-epochs 60 --batch-size 128
+  python residual_hybrid_model.py --data-path .\dataset --no-plot

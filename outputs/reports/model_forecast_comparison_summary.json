@@ -1,0 +1,160 @@
+{
+  "peak_threshold_raw": 516.5,
+  "metrics": [
+    {
+      "model": "Baseline LSTM",
+      "rmse": 53.916382652764966,
+      "mae": 22.675371170043945,
+      "r2": 0.9722554087638855,
+      "day_mae": 40.56219482421875,
+      "peak_mae": 29.047128677368164
+    },
+    {
+      "model": "Attention LSTM",
+      "rmse": 83.30910357386671,
+      "mae": 33.5336799621582,
+      "r2": 0.9337598085403442,
+      "day_mae": 62.613365173339844,
+      "peak_mae": 48.74648666381836
+    },
+    {
+      "model": "Residual Hybrid",
+      "rmse": 8.343669533788026,
+      "mae": 3.3600046634674072,
+      "r2": 0.9993355870246887,
+      "day_mae": 6.532865524291992,
+      "peak_mae": 5.581790924072266
+    }
+  ],
+  "regime_metrics": [
+    {
+      "regime": "sunny",
+      "model": "Baseline LSTM",
+      "count": 486,
+      "rmse": 75.91607207963278,
+      "mae": 47.238582611083984,
+      "day_mae": 47.238582611083984,
+      "peak_mae": 40.65032958984375
+    },
+    {
+      "regime": "sunny",
+      "model": "Attention LSTM",
+      "count": 486,
+      "rmse": 130.79824784998078,
+      "mae": 82.237060546875,
+      "day_mae": 82.237060546875,
+      "peak_mae": 78.9046630859375
+    },
+    {
+      "regime": "sunny",
+      "model": "Residual Hybrid",
+      "count": 486,
+      "rmse": 9.37200472984569,
+      "mae": 6.030306816101074,
+      "day_mae": 6.030306816101074,
+      "peak_mae": 5.774776458740234
+    },
+    {
+      "regime": "partly_cloudy",
+      "model": "Baseline LSTM",
+      "count": 55,
+      "rmse": 112.9531412107472,
+      "mae": 68.7579116821289,
+      "day_mae": 68.7579116821289,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "partly_cloudy",
+      "model": "Attention LSTM",
+      "count": 55,
+      "rmse": 156.70969253487482,
+      "mae": 117.79096221923828,
+      "day_mae": 117.79096221923828,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "partly_cloudy",
+      "model": "Residual Hybrid",
+      "count": 55,
+      "rmse": 8.539057585914643,
+      "mae": 6.472923755645752,
+      "day_mae": 6.472923755645752,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "cloudy",
+      "model": "Baseline LSTM",
+      "count": 2137,
+      "rmse": 31.663354104770114,
+      "mae": 11.859889030456543,
+      "day_mae": 52.09670639038086,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "cloudy",
+      "model": "Attention LSTM",
+      "count": 2137,
+      "rmse": 32.35621740388545,
+      "mae": 9.538722038269043,
+      "day_mae": 43.104103088378906,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "cloudy",
+      "model": "Residual Hybrid",
+      "count": 2137,
+      "rmse": 3.5822805735971035,
+      "mae": 1.0206819772720337,
+      "day_mae": 5.22625732421875,
+      "peak_mae": NaN
+    },
+    {
+      "regime": "night",
+      "model": "Baseline LSTM",
+      "count": 2582,
+      "rmse": 61.120302733625266,
+      "mae": 26.021780014038086,
+      "day_mae": 35.41572952270508,
+      "peak_mae": 24.920991897583008
+    },
+    {
+      "regime": "night",
+      "model": "Attention LSTM",
+      "count": 2582,
+      "rmse": 97.61683704668985,
+      "mae": 42.43114471435547,
+      "day_mae": 59.2509651184082,
+      "peak_mae": 38.022132873535156
+    },
+    {
+      "regime": "night",
+      "model": "Residual Hybrid",
+      "count": 2582,
+      "rmse": 10.635554916474629,
+      "mae": 4.727221965789795,
+      "day_mae": 6.943336486816406,
+      "peak_mae": 5.513164520263672
+    }
+  ],
+  "selected_days": {
+    "sunny": "2021-06-13",
+    "cloudy": "2021-12-30",
+    "mixed": "2021-10-01"
+  },
+  "artifacts": {
+    "predictions_csv": "outputs/reports/model_forecast_comparison_predictions.csv",
+    "metrics_csv": "outputs/reports/model_forecast_comparison_metrics.csv",
+    "regime_metrics_csv": "outputs/reports/model_forecast_comparison_regime_metrics.csv",
+    "selected_days_csv": "outputs/reports/model_forecast_comparison_selected_days.csv",
+    "summary_json": "outputs/reports/model_forecast_comparison_summary.json",
+    "comparison_30d_plot": "outputs/plots/model_forecast_comparison_30_days.png",
+    "month_day_plot": "outputs/plots/model_forecast_month_day_comparison.png",
+    "regime_plot": "outputs/plots/model_forecast_regime_mae.png",
+    "forecast_day_prefix": "outputs/plots/model_forecast_day"
+  },
+  "one_day_outputs": {
+    "sunny": "outputs/plots/model_forecast_day_sunny.png",
+    "cloudy": "outputs/plots/model_forecast_day_cloudy.png",
+    "mixed": "outputs/plots/model_forecast_day_mixed.png"
+  }
+}

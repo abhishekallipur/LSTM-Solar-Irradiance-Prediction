@@ -130,7 +130,7 @@ def plot_correlation_heatmap(df: pd.DataFrame, output_path: str) -> pd.DataFrame
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pearson correlation heatmap for NSRDB meteorological data and GHI")
     parser.add_argument("--data-path", type=str, default="dataset", help="Path to NSRDB CSV file or folder")
-    parser.add_argument("--output", type=str, default="outputs/plots/pearson_correlation_heatmap.png", help="Output image path")
+    parser.add_argument("--output", type=str, default="outputs/plots/analysis/pearson_correlation_heatmap.png", help="Output image path")
     args = parser.parse_args()
 
     df = load_nsrdb(args.data_path)

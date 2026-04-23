@@ -1,0 +1,6 @@
+{
+  "name": "Hybrid Residual",
+  "model_type": "tabular",
+  "ensemble_size": 3,
+  "n_residual_features": 38
+}

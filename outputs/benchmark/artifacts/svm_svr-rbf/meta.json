@@ -1,0 +1,9 @@
+{
+  "name": "SVM (SVR-RBF)",
+  "model_type": "tabular",
+  "kernel": "rbf",
+  "C": 100.0,
+  "epsilon": 0.1,
+  "train_samples_used": 3958,
+  "n_support_vectors": 79
+}

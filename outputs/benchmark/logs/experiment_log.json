@@ -1,0 +1,366 @@
+{
+  "timestamp": "2026-04-23T20:01:45.880133",
+  "config": {
+    "seed": 42,
+    "data_path": "dataset",
+    "output_dir": "E:\\OE casestudy\\code\\outputs\\benchmark",
+    "train_ratio": 0.7,
+    "val_ratio": 0.15,
+    "sequence_length": 48,
+    "quick_mode": true,
+    "gbt": {
+      "n_estimators": 200,
+      "learning_rate": 0.03,
+      "num_leaves": 63,
+      "min_child_samples": 20,
+      "feature_fraction": 0.85,
+      "subsample": 0.85,
+      "reg_alpha": 0.0,
+      "reg_lambda": 0.1,
+      "early_stopping_rounds": 100
+    },
+    "svm": {
+      "kernel": "rbf",
+      "C": 100.0,
+      "epsilon": 0.1,
+      "gamma": "scale",
+      "max_train_samples": 2000
+    },
+    "ann": {
+      "hidden_units": [
+        128,
+        64
+      ],
+      "dropout_rate": 0.2,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 15
+    },
+    "dnn": {
+      "hidden_units": [
+        256,
+        128,
+        64,
+        32
+      ],
+      "dropout_rates": [
+        0.3,
+        0.3,
+        0.2,
+        0.1
+      ],
+      "use_batch_norm": true,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 15
+    },
+    "lstm": {
+      "units": [
+        64,
+        32
+      ],
+      "dropout_rate": 0.2,
+      "dense_units": 16,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 12
+    },
+    "cnn_dnn": {
+      "conv_filters": [
+        64,
+        32
+      ],
+      "kernel_size": 3,
+      "dense_units": [
+        64,
+        32
+      ],
+      "dropout_rate": 0.3,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 12
+    },
+    "cnn_lstm": {
+      "conv_filters": [
+        64,
+        32
+      ],
+      "kernel_size": 3,
+      "lstm_units": [
+        64,
+        32
+      ],
+      "dense_units": 16,
+      "dropout_rate": 0.2,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 12
+    },
+    "cnn_attention_lstm": {
+      "conv_filters": [
+        64,
+        32
+      ],
+      "kernel_size": 3,
+      "lstm_units": [
+        64,
+        32
+      ],
+      "attention_units": 32,
+      "dense_units": 32,
+      "dropout_rate": 0.2,
+      "learning_rate": 0.001,
+      "epochs": 10,
+      "batch_size": 128,
+      "patience": 12
+    },
+    "hybrid_residual": {
+      "baseline_model_path": "outputs/artifacts/task_d_baseline_aggressive_peak_2x.h5",
+      "ensemble_size": 3,
+      "walk_forward_splits": 4,
+      "baseline_epochs": 10,
+      "baseline_batch_size": 128,
+      "baseline_learning_rate": 0.001
+    },
+    "evaluation": {
+      "weight_rmse": 0.3,
+      "weight_mae": 0.2,
+      "weight_peak_mae": 0.2,
+      "weight_cloud_mae": 0.15,
+      "weight_transition_mae": 0.15,
+      "walk_forward_splits": 5,
+      "transition_window_hours": 2
+    },
+    "selected_models": null
+  },
+  "metrics": {
+    "GBT (LightGBM)": {
+      "rmse": 8.351282075045036,
+      "mae": 3.3406857728108252,
+      "r2": 0.9993343545800373,
+      "day_mae": 1.5158779308633896,
+      "peak_mae": 6.7846464226627505,
+      "cloud_mae": 0.8462430964466786,
+      "transition_mae": 3.0746775984064696
+    },
+    "SVM (SVR-RBF)": {
+      "rmse": 53.366305320698224,
+      "mae": 43.08629660490518,
+      "r2": 0.9728186566981122,
+      "day_mae": 41.61046048564262,
+      "peak_mae": 34.67854916048125,
+      "cloud_mae": 42.162436897021394,
+      "transition_mae": 39.670253283041866
+    },
+    "ANN": {
+      "rmse": 19.523614990754055,
+      "mae": 14.843617998137221,
+      "r2": 0.9963620467650776,
+      "day_mae": 11.484174065086004,
+      "peak_mae": 26.46160180141733,
+      "cloud_mae": 9.861482332563869,
+      "transition_mae": 15.578277107867299
+    },
+    "DNN": {
+      "rmse": 22.019573288108177,
+      "mae": 11.960692850548504,
+      "r2": 0.9953724146249904,
+      "day_mae": 9.038343677599098,
+      "peak_mae": 17.957472062148685,
+      "cloud_mae": 5.1211136805436634,
+      "transition_mae": 11.157893949801483
+    },
+    "LSTM": {
+      "rmse": 53.6930353773821,
+      "mae": 21.905854108283727,
+      "r2": 0.9724848075324133,
+      "day_mae": 16.959079694400714,
+      "peak_mae": 30.517320338796544,
+      "cloud_mae": 9.656532959286498,
+      "transition_mae": 24.509429992449796
+    },
+    "CNN-DNN": {
+      "rmse": 53.28623774056533,
+      "mae": 22.94787377862564,
+      "r2": 0.9729001580028049,
+      "day_mae": 19.26907201889204,
+      "peak_mae": 37.55594299025301,
+      "cloud_mae": 8.188053634186799,
+      "transition_mae": 26.60824992827527
+    },
+    "CNN-LSTM": {
+      "rmse": 52.00181952951351,
+      "mae": 19.883653489350138,
+      "r2": 0.9741908487881633,
+      "day_mae": 16.547564194730363,
+      "peak_mae": 31.389617398357544,
+      "cloud_mae": 6.752679595642688,
+      "transition_mae": 24.769479355598754
+    },
+    "CNN-A-LSTM": {
+      "rmse": 58.002300901113436,
+      "mae": 24.405750869718794,
+      "r2": 0.9678909773440789,
+      "day_mae": 17.653292762400767,
+      "peak_mae": 34.58033443141628,
+      "cloud_mae": 9.897807414893185,
+      "transition_mae": 27.853064875947762
+    },
+    "Hybrid Residual": {
+      "rmse": 50.271074270165904,
+      "mae": 16.572118883095495,
+      "r2": 0.9758802404165594,
+      "day_mae": 12.153720391071172,
+      "peak_mae": 23.90067528996066,
+      "cloud_mae": 5.426734490207539,
+      "transition_mae": 20.375315679357456
+    }
+  },
+  "sanity_reports": {
+    "GBT (LightGBM)": {
+      "model_name": "GBT (LightGBM)",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    },
+    "SVM (SVR-RBF)": {
+      "model_name": "SVM (SVR-RBF)",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 233,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 233,
+      "applied_fallback": false,
+      "notes": [
+        "Clipped 233 negative values to 0.0."
+      ]
+    },
+    "ANN": {
+      "model_name": "ANN",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 80,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 80,
+      "applied_fallback": false,
+      "notes": [
+        "Clipped 80 negative values to 0.0."
+      ]
+    },
+    "DNN": {
+      "model_name": "DNN",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 1882,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 1882,
+      "applied_fallback": false,
+      "notes": [
+        "Clipped 1882 negative values to 0.0."
+      ]
+    },
+    "LSTM": {
+      "model_name": "LSTM",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    },
+    "CNN-DNN": {
+      "model_name": "CNN-DNN",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    },
+    "CNN-LSTM": {
+      "model_name": "CNN-LSTM",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    },
+    "CNN-A-LSTM": {
+      "model_name": "CNN-A-LSTM",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    },
+    "Hybrid Residual": {
+      "model_name": "Hybrid Residual",
+      "n_predictions": 5260,
+      "n_nan": 0,
+      "n_negative": 0,
+      "n_exploding": 0,
+      "n_outlier": 0,
+      "n_total_corrected": 0,
+      "applied_fallback": false,
+      "notes": []
+    }
+  },
+  "leakage_audit": {
+    "all_passed": true,
+    "checks": [
+      {
+        "name": "temporal_ordering",
+        "passed": true,
+        "detail": "Timestamps are monotonically non-decreasing."
+      },
+      {
+        "name": "split_no_overlap",
+        "passed": true,
+        "detail": "No temporal overlap between splits. train_max=2020-10-19T15:00:00.000000000  val_min=2020-10-19T16:00:00.000000000  val_max=2021-05-26T19:00:00.000000000  test_min=2021-05-26T20:00:00.000000000"
+      },
+      {
+        "name": "no_future_features",
+        "passed": true,
+        "detail": "ghi_lag_1 matches ghi.shift(1) \u2014 0 mismatches in 35063 rows."
+      },
+      {
+        "name": "scaler_train_only",
+        "passed": true,
+        "detail": "Scaler fit on 24544 samples (train size = 24544)."
+      },
+      {
+        "name": "target_not_in_features",
+        "passed": true,
+        "detail": "Target column 'ghi' is not in the tabular feature list."
+      },
+      {
+        "name": "no_backfill_after_split",
+        "passed": true,
+        "detail": "No NaN in any target partition."
+      }
+    ]
+  }
+}

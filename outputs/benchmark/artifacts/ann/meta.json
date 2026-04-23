@@ -1,0 +1,10 @@
+{
+  "name": "ANN",
+  "model_type": "tabular",
+  "hidden_units": [
+    128,
+    64
+  ],
+  "dropout_rate": 0.2,
+  "epochs": 10
+}

@@ -1,0 +1,35 @@
+{
+  "all_passed": true,
+  "checks": [
+    {
+      "name": "temporal_ordering",
+      "passed": true,
+      "detail": "Timestamps are monotonically non-decreasing."
+    },
+    {
+      "name": "split_no_overlap",
+      "passed": true,
+      "detail": "No temporal overlap between splits. train_max=2020-10-19T15:00:00.000000000  val_min=2020-10-19T16:00:00.000000000  val_max=2021-05-26T19:00:00.000000000  test_min=2021-05-26T20:00:00.000000000"
+    },
+    {
+      "name": "no_future_features",
+      "passed": true,
+      "detail": "ghi_lag_1 matches ghi.shift(1) \u2014 0 mismatches in 35063 rows."
+    },
+    {
+      "name": "scaler_train_only",
+      "passed": true,
+      "detail": "Scaler fit on 24544 samples (train size = 24544)."
+    },
+    {
+      "name": "target_not_in_features",
+      "passed": true,
+      "detail": "Target column 'ghi' is not in the tabular feature list."
+    },
+    {
+      "name": "no_backfill_after_split",
+      "passed": true,
+      "detail": "No NaN in any target partition."
+    }
+  ]
+}

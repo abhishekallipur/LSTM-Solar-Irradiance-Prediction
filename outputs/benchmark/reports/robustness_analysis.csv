@@ -1,0 +1,10 @@
+model,n_nan,n_negative,n_exploding,n_total_corrected,robustness_rank
+GBT (LightGBM),0,0,0,0,1
+CNN-LSTM,0,0,0,0,2
+CNN-DNN,0,0,0,0,3
+LSTM,0,0,0,0,4
+CNN-A-LSTM,0,0,0,0,5
+Hybrid Residual,0,0,0,0,6
+ANN,0,80,0,80,7
+SVM (SVR-RBF),0,233,0,233,8
+DNN,0,1882,0,1882,9

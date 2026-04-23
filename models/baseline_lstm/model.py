@@ -574,9 +574,9 @@ def run_pipeline(
     learning_rate: float = 1e-3,
     persistence_blend: float = -1.0,
     prediction_days: int = 30,
-    plot_output_path: str = "outputs/plots/prediction_30_days.png",
-    one_day_plot_output_path: str = "outputs/plots/prediction_1_day.png",
-    training_progress_output_path: str = "outputs/plots/training_improvement.png",
+    plot_output_path: str = "outputs/plots/baseline/prediction_30_days.png",
+    one_day_plot_output_path: str = "outputs/plots/baseline/prediction_1_day.png",
+    training_progress_output_path: str = "outputs/plots/baseline/training_improvement.png",
     one_day_start_index: int = 0,
     seed: int = 42,
     no_plot: bool = False,
@@ -735,9 +735,9 @@ def parse_args() -> argparse.Namespace:
         help="Blend weight for persistence baseline. Use negative value for auto-tune on validation.",
     )
     parser.add_argument("--prediction-days", type=int, default=30, help="Number of days to include in saved forecast plot.")
-    parser.add_argument("--plot-output", type=str, default="outputs/plots/prediction_30_days.png", help="File path for saved prediction plot.")
-    parser.add_argument("--one-day-plot-output", type=str, default="outputs/plots/prediction_1_day.png", help="File path for saved 1-day prediction plot.")
-    parser.add_argument("--training-progress-plot-output", type=str, default="outputs/plots/training_improvement.png", help="File path for saved training improvement plot.")
+    parser.add_argument("--plot-output", type=str, default="outputs/plots/baseline/prediction_30_days.png", help="File path for saved prediction plot.")
+    parser.add_argument("--one-day-plot-output", type=str, default="outputs/plots/baseline/prediction_1_day.png", help="File path for saved 1-day prediction plot.")
+    parser.add_argument("--training-progress-plot-output", type=str, default="outputs/plots/baseline/training_improvement.png", help="File path for saved training improvement plot.")
     parser.add_argument("--one-day-start-index", type=int, default=0, help="0-based day index within the test split for 1-day plot.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--no-plot", action="store_true", help="Disable plotting.")

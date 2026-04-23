@@ -1,0 +1,8 @@
+{
+  "w_baseline": 0.8,
+  "w_attention": 0.2,
+  "rmse": 55.54,
+  "mae": 22.82,
+  "day_mae": 39.9,
+  "peak_mae": 23.2
+}

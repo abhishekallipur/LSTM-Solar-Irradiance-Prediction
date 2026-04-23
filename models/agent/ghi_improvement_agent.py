@@ -73,16 +73,16 @@ def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray, peak_threshold: fl
 @dataclass
 class Tier1Artifacts:
     blend_csv: str = "outputs/reports/blend_search_results.csv"
-    blend_plot: str = "outputs/plots/blend_ratio_vs_metrics.png"
+    blend_plot: str = "outputs/plots/sprint/blend_ratio_vs_metrics.png"
     attention_model: str = "outputs/artifacts/attention_lstm_50epochs.h5"
     attention_history: str = "outputs/reports/attention_training_history.json"
-    attention_curve_plot: str = "outputs/plots/attention_training_curve.png"
-    attention_pred_plot: str = "outputs/plots/attention_actual_vs_pred_50epochs.png"
-    attention_weights_plot: str = "outputs/plots/attention_weights_50epochs.png"
+    attention_curve_plot: str = "outputs/plots/sprint/attention_training_curve.png"
+    attention_pred_plot: str = "outputs/plots/sprint/attention_actual_vs_pred_50epochs.png"
+    attention_weights_plot: str = "outputs/plots/sprint/attention_weights_50epochs.png"
     comparison_csv: str = "outputs/reports/tier1_comparison.csv"
-    comparison_rmse_plot: str = "outputs/plots/comparison_rmse_mae_r2.png"
-    comparison_day_plot: str = "outputs/plots/comparison_daytime_metrics.png"
-    comparison_peak_plot: str = "outputs/plots/comparison_peak_metrics.png"
+    comparison_rmse_plot: str = "outputs/plots/sprint/comparison_rmse_mae_r2.png"
+    comparison_day_plot: str = "outputs/plots/sprint/comparison_daytime_metrics.png"
+    comparison_peak_plot: str = "outputs/plots/sprint/comparison_peak_metrics.png"
     summary_txt: str = "outputs/reports/tier1_summary.txt"
     log_file: str = "outputs/reports/ghi_agent_log.txt"
 

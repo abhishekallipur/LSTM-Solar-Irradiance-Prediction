@@ -1,0 +1,4 @@
+variant,rmse,mae,day_mae,peak_mae
+original_huber,53.51,21.79,39.8,22.38
+aggressive_peak_2x,53.92,22.68,40.56,21.47
+aggressive_peak_3x,54.23,22.68,39.81,21.49

@@ -1,0 +1,13 @@
+{
+  "name": "CNN-DNN",
+  "model_type": "sequence",
+  "conv_filters": [
+    64,
+    32
+  ],
+  "dense_units": [
+    64,
+    32
+  ],
+  "epochs": 10
+}
