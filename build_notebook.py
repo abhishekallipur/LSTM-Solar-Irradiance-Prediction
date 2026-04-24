@@ -1,0 +1,291 @@
+import json
+
+def code_cell(code):
+    lines = code.strip().split('\n')
+    return {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": lines}
+
+def md_cell(text):
+    lines = text.strip().split('\n')
+    return {"cell_type": "markdown", "metadata": {}, "source": lines}
+
+cells = [
+    md_cell("# Solar Irradiance Forecasting — Complete Pipeline\n\nGoogle Colab-ready notebook with 9 models and full analysis pipeline."),
+    md_cell("## SECTION 1 — SETUP"),
+    md_cell("### 1.1 Imports & Config"),
+    code_cell("""import numpy as np, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, warnings
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import lightgbm as lgb
+from sklearn.svm import SVR
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+warnings.filterwarnings('ignore')
+
+GLOBAL_SEED, TRAIN_RATIO, VAL_RATIO = 42, 0.70, 0.15
+GHI_FLOOR, GHI_CEILING, GHI_DAYLIGHT = 0.0, 1500.0, 10.0
+SEQUENCE_LENGTH, BATCH_SIZE, EPOCHS = 48, 32, 50
+
+def set_seed(seed=GLOBAL_SEED):
+    import random
+    random.seed(seed); np.random.seed(seed); tf.random.set_seed(seed)
+set_seed()
+print("✓ Ready")"""),
+
+    md_cell("## SECTION 2 — DATASET LOADING"),
+    code_cell("""dataset_path = 'dataset'
+from pathlib import Path
+
+def load_data(path):
+    dfs = [pd.read_csv(f) for f in Path(path).glob('*.csv')]
+    df = pd.concat(dfs, ignore_index=True)
+
+    cols = {'GHI': 'ghi', 'Temperature': 'temperature', 'RelativeHumidity': 'relative_humidity', 'WindSpeed': 'wind_speed', 'SolarZenithAngle': 'solar_zenith_angle'}
+    for old, new in cols.items():
+        if old in df.columns: df[new] = df.pop(old)
+
+    if 'timestamp' not in df.columns:
+        if all(c in df.columns for c in ['Year','Month','Day','Hour']):
+            df['timestamp'] = pd.to_datetime(df[['Year','Month','Day','Hour']])
+        else:
+            df['timestamp'] = pd.date_range('2020-01-01', periods=len(df), freq='H')
+
+    df = df.sort_values('timestamp').reset_index(drop=True).ffill().fillna(0)
+    return df
+
+df = load_data(dataset_path)
+print(f"✓ {len(df)} rows, {len(df.columns)} cols")"""),
+
+    md_cell("## SECTION 3 — FEATURES"),
+    code_cell("""df = df.copy()
+
+# Solar
+zenith = df['solar_zenith_angle'].clip(0, 180)
+cos_z = np.cos(np.deg2rad(zenith)).clip(0, 1)
+df['solar_elevation'] = 90 - zenith
+df['cos_zenith'] = cos_z
+df['air_mass'] = np.where(cos_z > 0, 1/(cos_z + 0.15*np.power(np.clip(93.885-zenith, 1e-3, None), -1.253)), 0)
+df['clear_sky_ghi'] = np.where(cos_z > 0, 1098*cos_z*np.exp(-0.059/np.clip(cos_z, 0.05, None)), 0)
+df['clear_sky_index'] = (df['ghi']/np.clip(df['clear_sky_ghi'], 1, None)).clip(0, 2)
+doy = df['timestamp'].dt.dayofyear
+df['extraterrestrial_rad'] = 1367*(1 + 0.033*np.cos(np.deg2rad(360*doy/365)))
+
+# Time
+df['hour'] = df['timestamp'].dt.hour.astype(float)
+df['sin_hour'], df['cos_hour'] = np.sin(2*np.pi*df['hour']/24), np.cos(2*np.pi*df['hour']/24)
+df['sin_doy'], df['cos_doy'] = np.sin(2*np.pi*doy/365), np.cos(2*np.pi*doy/365)
+df['is_daylight'] = (df['ghi'] > GHI_DAYLIGHT).astype(float)
+
+# Lags
+for lag in [1,2,3,24]: df[f'ghi_lag_{lag}'] = df['ghi'].shift(lag)
+
+# Diffs
+df['ghi_diff_1'], df['ghi_diff_3'] = df['ghi'].diff(1), df['ghi'].diff(3)
+df['ghi_gradient_3'] = (df['ghi'] - df['ghi'].shift(3))/3
+df['ghi_gradient_6'] = (df['ghi'] - df['ghi'].shift(6))/6
+
+# Rolling
+for w in [3,6,24]:
+    df[f'ghi_roll_mean_{w}'] = df['ghi'].rolling(w).mean()
+    df[f'ghi_roll_std_{w}'] = df['ghi'].rolling(w).std()
+
+# Regime
+def regime(csi, day):
+    r = np.full(len(csi), 2, dtype=int)
+    d = day > 0.5
+    r[d & (csi >= 0.8)] = 0
+    r[d & (csi >= 0.45) & (csi < 0.8)] = 1
+    return r
+
+df['regime_id'] = regime(df['clear_sky_index'], df['is_daylight'])
+for i, name in enumerate(['clear', 'partly_cloudy', 'cloudy']):
+    df[f'regime_{name}'] = (df['regime_id'] == i).astype(float)
+
+df = df.ffill().fillna(0)
+df['ghi'] = df['ghi'].clip(GHI_FLOOR, GHI_CEILING)
+print(f"✓ {len(df.columns)} features")"""),
+
+    md_cell("## SECTION 4 — SPLIT"),
+    code_cell("""TABULAR = ['temperature','relative_humidity','wind_speed','solar_zenith_angle','solar_elevation','cos_zenith','air_mass','clear_sky_ghi','clear_sky_index','extraterrestrial_rad','hour','sin_hour','cos_hour','sin_doy','cos_doy','is_daylight','ghi_lag_1','ghi_lag_2','ghi_lag_3','ghi_lag_24','ghi_roll_mean_3','ghi_roll_mean_6','ghi_roll_mean_24','ghi_roll_std_3','ghi_roll_std_6','ghi_roll_std_24','ghi_diff_1','ghi_diff_3','ghi_gradient_3','ghi_gradient_6','regime_clear','regime_partly_cloudy','regime_cloudy']
+SEQ_FEATURES = ['ghi','temperature','relative_humidity','wind_speed','solar_zenith_angle','cos_zenith','is_daylight','extraterrestrial_rad','hour','sin_hour','cos_hour','sin_doy','cos_doy','ghi_lag_1','ghi_lag_2','ghi_lag_3','ghi_lag_24','ghi_diff_1','ghi_diff_3','ghi_gradient_3','ghi_roll_mean_3','ghi_roll_mean_6','ghi_roll_mean_24','ghi_roll_std_6','ghi_roll_std_24']
+
+n = len(df)
+n_tr, n_va = int(n*TRAIN_RATIO), int(n*VAL_RATIO)
+df_tr, df_va, df_te = df.iloc[:n_tr], df.iloc[n_tr:n_tr+n_va], df.iloc[n_tr+n_va:]
+
+scX, scY = StandardScaler(), MinMaxScaler()
+scX.fit(df_tr[TABULAR])
+scY.fit(df_tr[['ghi']])
+
+X_tr, X_va, X_te = scX.transform(df_tr[TABULAR]).astype(np.float32), scX.transform(df_va[TABULAR]).astype(np.float32), scX.transform(df_te[TABULAR]).astype(np.float32)
+y_tr_raw, y_va_raw, y_te_raw = df_tr['ghi'].values.reshape(-1,1).astype(np.float32), df_va['ghi'].values.reshape(-1,1).astype(np.float32), df_te['ghi'].values.reshape(-1,1).astype(np.float32)
+y_tr, y_va, y_te = scY.transform(y_tr_raw).astype(np.float32), scY.transform(y_va_raw).astype(np.float32), scY.transform(y_te_raw).astype(np.float32)
+
+print(f"Train: {X_tr.shape} | Val: {X_va.shape} | Test: {X_te.shape}")"""),
+
+    code_cell("""def seq_gen(X, y, L):
+    Xs, ys, ids = [], [], []
+    for i in range(L, len(X)):
+        Xs.append(X[i-L:i])
+        ys.append(y[i])
+        ids.append(i)
+    return np.array(Xs, dtype=np.float32), np.array(ys, dtype=np.float32), np.array(ids)
+
+X_full = scX.transform(df[SEQ_FEATURES]).astype(np.float32)
+y_full = scY.transform(df[['ghi']]).astype(np.float32)
+X_sq, y_sq, idx_sq = seq_gen(X_full, y_full, SEQUENCE_LENGTH)
+
+tr_m, va_m, te_m = idx_sq < n_tr, (idx_sq >= n_tr) & (idx_sq < n_tr+n_va), idx_sq >= n_tr+n_va
+X_tr_sq, y_tr_sq = X_sq[tr_m], y_sq[tr_m]
+X_va_sq, y_va_sq = X_sq[va_m], y_sq[va_m]
+X_te_sq, y_te_sq = X_sq[te_m], y_sq[te_m]
+
+print(f"Sequences: {X_tr_sq.shape} | {X_va_sq.shape} | {X_te_sq.shape}")"""),
+
+    md_cell("## SECTION 5 — MODELS"),
+    code_cell("""def metrics(y_t, y_p):
+    y_t, y_p = np.asarray(y_t).ravel(), np.asarray(y_p).ravel()
+    return {'rmse': np.sqrt(mean_squared_error(y_t, y_p)), 'mae': mean_absolute_error(y_t, y_p), 'r2': r2_score(y_t, y_p) if np.std(y_t)>1e-8 else 0}
+
+preds, mets = {}, {}
+
+# GBT
+print("GBT...", end=' ')
+gbt = lgb.LGBMRegressor(n_estimators=100, lr=0.05, random_state=42, verbose=-1)
+gbt.fit(X_tr, y_tr.ravel(), eval_set=[(X_va, y_va.ravel())], callbacks=[lgb.early_stopping(10)])
+preds['GBT'] = np.clip(scY.inverse_transform(gbt.predict(X_te).reshape(-1,1)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['GBT'] = metrics(y_te_raw, preds['GBT'])
+print(f"✓ RMSE {mets['GBT']['rmse']:.1f}")
+
+# SVM
+print("SVM...", end=' ')
+svm = SVR(kernel='rbf', C=100, epsilon=0.1)
+svm.fit(X_tr, y_tr.ravel())
+preds['SVM'] = np.clip(scY.inverse_transform(svm.predict(X_te).reshape(-1,1)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['SVM'] = metrics(y_te_raw, preds['SVM'])
+print(f"✓ RMSE {mets['SVM']['rmse']:.1f}")
+
+# ANN
+print("ANN...", end=' ')
+ann = keras.Sequential([layers.Dense(128, 'relu', input_shape=(X_tr.shape[1],)), layers.Dropout(0.3), layers.Dense(32, 'relu'), layers.Dense(1)])
+ann.compile('adam', 'mse')
+ann.fit(X_tr, y_tr, validation_data=(X_va, y_va), epochs=30, batch_size=32, verbose=0)
+preds['ANN'] = np.clip(scY.inverse_transform(ann.predict(X_te, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['ANN'] = metrics(y_te_raw, preds['ANN'])
+print(f"✓ RMSE {mets['ANN']['rmse']:.1f}")
+
+# DNN
+print("DNN...", end=' ')
+dnn = keras.Sequential([layers.Dense(256, 'relu', input_shape=(X_tr.shape[1],)), layers.BatchNormalization(), layers.Dropout(0.4), layers.Dense(128, 'relu'), layers.Dropout(0.3), layers.Dense(32, 'relu'), layers.Dense(1)])
+dnn.compile('adam', 'mse')
+dnn.fit(X_tr, y_tr, validation_data=(X_va, y_va), epochs=30, batch_size=32, verbose=0)
+preds['DNN'] = np.clip(scY.inverse_transform(dnn.predict(X_te, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['DNN'] = metrics(y_te_raw, preds['DNN'])
+print(f"✓ RMSE {mets['DNN']['rmse']:.1f}")
+
+# LSTM
+print("LSTM...", end=' ')
+lstm = keras.Sequential([layers.LSTM(64, 'relu', input_shape=(SEQUENCE_LENGTH, X_tr_sq.shape[2])), layers.Dropout(0.2), layers.Dense(16, 'relu'), layers.Dense(1)])
+lstm.compile('adam', 'mse')
+lstm.fit(X_tr_sq, y_tr_sq, validation_data=(X_va_sq, y_va_sq), epochs=30, batch_size=32, verbose=0)
+preds['LSTM'] = np.clip(scY.inverse_transform(lstm.predict(X_te_sq, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['LSTM'] = metrics(scY.inverse_transform(y_te_sq).ravel(), preds['LSTM'])
+print(f"✓ RMSE {mets['LSTM']['rmse']:.1f}")
+
+# CNN-DNN
+print("CNN-DNN...", end=' ')
+cnn_dnn = keras.Sequential([layers.Conv1D(32, 3, 'relu', input_shape=(SEQUENCE_LENGTH, X_tr_sq.shape[2])), layers.MaxPooling1D(2), layers.Conv1D(64, 3, 'relu'), layers.Flatten(), layers.Dense(128, 'relu'), layers.Dense(1)])
+cnn_dnn.compile('adam', 'mse')
+cnn_dnn.fit(X_tr_sq, y_tr_sq, validation_data=(X_va_sq, y_va_sq), epochs=30, batch_size=32, verbose=0)
+preds['CNN-DNN'] = np.clip(scY.inverse_transform(cnn_dnn.predict(X_te_sq, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['CNN-DNN'] = metrics(scY.inverse_transform(y_te_sq).ravel(), preds['CNN-DNN'])
+print(f"✓ RMSE {mets['CNN-DNN']['rmse']:.1f}")
+
+# CNN-LSTM
+print("CNN-LSTM...", end=' ')
+cnn_lstm = keras.Sequential([layers.Conv1D(32, 3, 'relu', input_shape=(SEQUENCE_LENGTH, X_tr_sq.shape[2])), layers.MaxPooling1D(2), layers.LSTM(64, 'relu'), layers.Dense(16, 'relu'), layers.Dense(1)])
+cnn_lstm.compile('adam', 'mse')
+cnn_lstm.fit(X_tr_sq, y_tr_sq, validation_data=(X_va_sq, y_va_sq), epochs=30, batch_size=32, verbose=0)
+preds['CNN-LSTM'] = np.clip(scY.inverse_transform(cnn_lstm.predict(X_te_sq, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['CNN-LSTM'] = metrics(scY.inverse_transform(y_te_sq).ravel(), preds['CNN-LSTM'])
+print(f"✓ RMSE {mets['CNN-LSTM']['rmse']:.1f}")
+
+# CNN-A-LSTM
+print("CNN-A-LSTM...", end=' ')
+cnn_a = keras.Sequential([layers.Conv1D(32, 3, 'relu', input_shape=(SEQUENCE_LENGTH, X_tr_sq.shape[2])), layers.MaxPooling1D(2), layers.LSTM(64, 'relu', return_sequences=True), layers.LSTM(32, 'relu'), layers.Dense(16, 'relu'), layers.Dense(1)])
+cnn_a.compile('adam', 'mse')
+cnn_a.fit(X_tr_sq, y_tr_sq, validation_data=(X_va_sq, y_va_sq), epochs=30, batch_size=32, verbose=0)
+preds['CNN-A-LSTM'] = np.clip(scY.inverse_transform(cnn_a.predict(X_te_sq, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['CNN-A-LSTM'] = metrics(scY.inverse_transform(y_te_sq).ravel(), preds['CNN-A-LSTM'])
+print(f"✓ RMSE {mets['CNN-A-LSTM']['rmse']:.1f}")
+
+# Hybrid
+print("Hybrid...", end=' ')
+base = keras.Sequential([layers.LSTM(32, 'relu', input_shape=(SEQUENCE_LENGTH, X_tr_sq.shape[2])), layers.Dense(1)])
+base.compile('adam', 'mse')
+base.fit(X_tr_sq, y_tr_sq, validation_data=(X_va_sq, y_va_sq), epochs=20, batch_size=32, verbose=0)
+preds['Hybrid'] = np.clip(scY.inverse_transform(base.predict(X_te_sq, verbose=0)).ravel(), GHI_FLOOR, GHI_CEILING)
+mets['Hybrid'] = metrics(scY.inverse_transform(y_te_sq).ravel(), preds['Hybrid'])
+print(f"✓ RMSE {mets['Hybrid']['rmse']:.1f}")"""),
+
+    md_cell("## SECTION 6 — RESULTS"),
+    code_cell("""df_res = pd.DataFrame([{'Model': k, 'RMSE': mets[k]['rmse'], 'MAE': mets[k]['mae'], 'R2': mets[k]['r2']} for k in mets]).sort_values('RMSE')
+print("\\n" + "="*50)
+print(df_res.to_string(index=False))
+print(f"\\n✓ Best: {df_res.iloc[0]['Model']} (RMSE: {df_res.iloc[0]['RMSE']:.2f} W/m²)")
+print("="*50)"""),
+
+    md_cell("## SECTION 7 — FIGURES"),
+    code_cell("""fig, ax = plt.subplots(figsize=(12, 5))
+models, rmse_vals = list(mets.keys()), [mets[m]['rmse'] for m in mets]
+ax.barh(models, rmse_vals, color='steelblue')
+ax.set_xlabel('RMSE (W/m²)', fontweight='bold')
+ax.set_title('Model Performance', fontweight='bold')
+plt.tight_layout()
+plt.savefig('figure_01_performance.png', dpi=100, bbox_inches='tight')
+plt.show()
+print("✓ Figure 1")"""),
+
+    code_cell("""fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+axes = axes.ravel()
+for i, (model, pred) in enumerate(preds.items()):
+    ax = axes[i]
+    ax.scatter(y_te_raw.ravel()[:min(len(y_te_raw), len(pred))], pred[:min(len(y_te_raw), len(pred))], alpha=0.3, s=10)
+    lim = max(y_te_raw.max(), pred.max())
+    ax.plot([0, lim], [0, lim], 'r--', lw=2)
+    ax.set_title(f'{model} (R²={mets[model]["r2"]:.3f})')
+    ax.grid(True, alpha=0.3)
+plt.suptitle('Actual vs Predicted', fontweight='bold')
+plt.tight_layout()
+plt.savefig('figure_02_scatter.png', dpi=100, bbox_inches='tight')
+plt.show()
+print("✓ Figure 2")"""),
+
+    md_cell("## SECTION 8 — COMPLETE"),
+    code_cell("""print("\\n" + "="*60)
+print("PIPELINE COMPLETE")
+print("="*60)
+print(f"✓ 9 models trained on {len(df_tr)} train samples")
+print(f"✓ 2 figures generated")
+print(f"✓ Ranked models by RMSE")
+print(f"\\nDataset: {len(df)} total | Test: {len(y_te_raw)}")
+print(f"Best model: {df_res.iloc[0]['Model']}")
+print(f"Best RMSE: {df_res.iloc[0]['RMSE']:.2f} W/m²")
+print("="*60)
+print("\\nUpload 'Solar_Irradiance_Forecasting_Colab.ipynb' to Google Colab")""")
+]
+
+notebook = {
+    "cells": cells,
+    "metadata": {
+        "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+        "language_info": {"codemirror_mode": {"name": "ipython", "version": 3}, "file_extension": ".py", "mimetype": "text/x-python", "name": "python", "nbconvert_exporter": "python", "pygments_lexer": "ipython3", "version": "3.9.0"}
+    },
+    "nbformat": 4,
+    "nbformat_minor": 4
+}
+
+with open('e:/OE casestudy/code/Solar_Irradiance_Forecasting_Colab.ipynb', 'w') as f:
+    json.dump(notebook, f, indent=1)
+
+print("Notebook created successfully")

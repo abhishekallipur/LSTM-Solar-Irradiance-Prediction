@@ -10,5 +10,5 @@
     32
   ],
   "attention_units": 32,
-  "epochs": 10
+  "epochs": 100
 }
